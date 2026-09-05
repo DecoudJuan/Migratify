@@ -15,11 +15,13 @@ runs are on disk, so the first screen already answers "am I set up?".
 
 from __future__ import annotations
 
+import contextlib
+import importlib
 import shlex
 import sys
 from pathlib import Path
+from types import ModuleType
 
-import click
 import typer
 from rich.console import Console
 
@@ -44,28 +46,35 @@ ART_ASCII = (
     "  [bold cyan]`---'[/bold cyan]  ",
 )
 
-#: Typer vendors its own copy of Click's exception classes, so a usage error
-#: raised inside a Typer app is *not* an instance of ``click.ClickException``.
-#: Catching only one of the two families lets a plain "no such command" reach
-#: the generic handler and be reported as if it were a crash.
-_EXCEPTION_MODULES = [click.exceptions]
-try:
-    from typer import _click as _typer_click
+def _exception_modules() -> list[ModuleType]:
+    """Every module that might define the exceptions a command can raise.
 
-    _EXCEPTION_MODULES.append(_typer_click.exceptions)
-except (ImportError, AttributeError):  # pragma: no cover - older Typer
-    pass
+    Typer used to raise Click's exceptions; since it vendored its own copy of
+    Click it raises those instead, and the two are unrelated classes -- a
+    usage error from a Typer app is *not* a ``click.ClickException``. Catching
+    one family only would let a plain "no such command" reach the generic
+    handler and be reported as if it were a crash.
+
+    Every import here is optional. Click is not a dependency of this project:
+    it arrives only when an older Typer pulls it in, and asking for it by name
+    is how the prompt would crash on a clean install.
+    """
+    modules: list[ModuleType] = []
+    for name in ("typer.exceptions", "typer._click.exceptions", "click.exceptions"):
+        with contextlib.suppress(ImportError):
+            modules.append(importlib.import_module(name))
+    return modules
 
 
 def _exception_family(name: str) -> tuple[type[BaseException], ...]:
-    """Every class called *name* across the Click copies in play.
+    """Every class called *name* across those modules.
 
-    The two copies do not carry the same set -- Typer's vendored module has
-    the exception classes but not the control-flow ones -- so a missing name
-    is normal, not a problem to report.
+    They do not carry the same set -- Typer's vendored Click has the exception
+    classes but not the control-flow ones -- so a missing name is normal, not
+    a problem to report.
     """
     found: list[type[BaseException]] = []
-    for module in _EXCEPTION_MODULES:
+    for module in _exception_modules():
         candidate = getattr(module, name, None)
         if (
             isinstance(candidate, type)

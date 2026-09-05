@@ -9,6 +9,9 @@ the ordinary case on Windows before ``force_utf8_output`` has run.
 from __future__ import annotations
 
 import io
+import os
+import subprocess
+import sys
 
 import pytest
 from rich.console import Console
@@ -110,6 +113,39 @@ class TestThePromptSurvivesItsCommands:
         shell.dispatch(["--help"], console)
         # Commands write to their own console; the prompt only has to survive.
         assert "Usage" in capsys.readouterr().out
+
+
+class TestWithoutClick:
+    """Click is not a dependency of this project.
+
+    Typer vendors its own copy, so a clean install has no ``click`` to import
+    -- and a prompt that reaches for one crashes on the machines that matter
+    most, the ones running the packaged binary. Checked in a subprocess
+    because the import has already happened in this one.
+    """
+
+    def test_the_prompt_still_reports_a_usage_error(self, tmp_path) -> None:
+        (tmp_path / "click.py").write_text('raise ImportError("no click here")')
+
+        env = dict(os.environ, PYTHONPATH=str(tmp_path), PYTHONIOENCODING="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import io\n"
+                "from rich.console import Console\n"
+                "from migratify import shell\n"
+                "out = io.StringIO()\n"
+                "shell.dispatch(['not-a-command'], Console(file=out, no_color=True))\n"
+                "print(out.getvalue())\n",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "No such command" in result.stdout
 
 
 class TestLoop:
