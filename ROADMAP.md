@@ -93,14 +93,19 @@ The core of the project. Pure, offline-testable, direction-agnostic.
 A deliberately hostile 24-track playlist (`scripts/seed_test_playlist.py`),
 free Spotify account, both directions:
 
-| Direction | Auto | Review | Not found |
-|---|---:|---:|---:|
-| Spotify → YouTube Music | 21 | 3 | 0 |
-| YouTube Music → Spotify | 22 | 2 | 0 |
+| Direction | Auto | Review | Not found | Applied |
+|---|---:|---:|---:|---|
+| Spotify → YouTube Music | 24 | 0 | 0 | 24 written |
+| YouTube Music → Spotify | 22 | 2 | 0 | 22 written, 2 correctly left out |
 
-Both sit inside the 85–95% healthy band, and every review case was genuinely
-ambiguous — competing masters within a couple of seconds, not confusion
-between different songs.
+Both directions were applied and read back: name, description, track count and
+order all intact. The three cases that went to review before the duplicate
+rule landed all resolved to the exact right match afterwards — Blue Monday to
+the original rather than the '88 remix, Come Together to the 2009 remaster
+rather than the 2019 mix, Levitating keeping its feature credit.
+
+The two remaining review cases in the reverse direction are genuinely
+ambiguous: competing masters seconds apart, not confusion between songs.
 
 The traps behaved: `Hurt — Johnny Cash` resolved to Johnny Cash and not to the
 real catalog artist *The Ghost of Johnny Cash*; radio edits matched radio
