@@ -115,6 +115,68 @@ Getting there took two bug fixes rather than any tuning — Spotify names track
 duration differently in search than in playlists, and the ambiguity rule was
 treating duplicate catalog listings of one recording as a tie.
 
+## Phase 9 — Beyond one playlist ✅
+
+The three items the CLI had earned by proving itself on real accounts.
+
+| | Item |
+|---|---|
+| ✅ | Liked Songs / saved library as a source, both directions, under one neutral `LIKED` id |
+| ✅ | `migratify sync` — re-run a migration and add only what is new, per destination |
+| ✅ | Standalone binary via PyInstaller, built and verified per platform in CI |
+
+### Liked Songs
+
+YouTube Music was nearly free: it addresses the saved library as a playlist
+with the fixed id `LM`, so the work was translating the neutral id at the
+edges.
+
+Spotify was not. Pathfinder rejects `spotify:collection:tracks` outright —
+*"Argument <uri> for field /playlistV2 is not of type [PLAYLIST,
+PLAYLIST_V2]"* — and no liked-songs read operation appears in a capture of the
+Liked Songs page at all, because the list does not come over pathfinder. It
+comes from the **collection service**: `POST spclient /collection/v2/paging`
+with `set: "collection"`, which answers with the whole set in one shot and no
+pagination cursor. That set is mixed — saved albums and liked tracks share it
+— and carries nothing but URIs and an `added_at`, so the metadata comes from
+`decorateContextTracks`, an *observed* operation rather than a pinned one.
+
+Found by watching the real player rather than guessing, which is the same
+principle the rest of the Spotify path is built on.
+
+**Nothing is written into a saved library.** Liked songs land as an ordinary
+playlist on the destination: a playlist you did not want is one click to
+delete, several hundred tracks added to a library are not.
+
+### Sync
+
+Needed no new tables. `runs` already records which destination playlist a run
+created and `run_tracks` already flags what was written, so sync is two
+queries over what was there.
+
+The link is keyed on the **destination service**, which is what makes it keep
+working as providers are added: a playlist already carried to YouTube Music
+needs only its new tracks there, and still migrates in full the first time it
+goes anywhere it has never been.
+
+Only *written* tracks are skipped. A track left in review, skipped, or not
+found is offered again on the next sync — the same reasoning that keeps misses
+out of the match cache: catalogs change.
+
+### The binary
+
+A folder rather than a one-file bundle, because `--onefile` unpacks itself on
+every invocation and this is a CLI you run several times in a row. It carries
+the browser automation, because signing in *is* the browser automation and a
+build without it can only reach fallbacks that a free Spotify account cannot
+use. It does not carry a browser: Migratify drives the one already installed.
+
+`scripts/build_exe.py` builds *and then runs* the result — a bundle missing a
+data file builds perfectly and fails on first launch, so building without
+checking proves nothing. Verified on Windows: `auth status` reported both
+services working against live APIs, and a run against a throwaway
+`MIGRATIFY_HOME` drove a real browser through the bundled Playwright.
+
 ---
 
 ## Beyond v0.1 💭
@@ -123,11 +185,9 @@ Not committed to, recorded so the reasoning is not lost.
 
 | | Item | Note |
 |---|---|---|
-| 💭 | Liked Songs / saved library migration | Same engine, different source enumeration |
-| 💭 | Sync mode — re-run against a playlist and add only what is new | The match cache already makes this cheap |
-| 💭 | More providers: Tidal, Apple Music, Deezer | The point of `MusicProvider`. Should need zero changes to `matching/` |
+| 💭 | More providers: Tidal, Apple Music, Deezer | The point of `MusicProvider`. Should need zero changes to `matching/`, and `sync` already keys per destination |
 | 💭 | `--strict` profile that reviews everything below 95 | For libraries where a wrong track is worse than a missing one |
-| 💭 | Packaged `.exe` via PyInstaller | Only worth it if the CLI proves itself first |
+| 💭 | Scheduled sync | `sync` is the hard half; the rest is a scheduler, which the OS already has |
 | ⬜ | Spotify cover upload | The one write endpoint never observed from a real session; currently 404s. Re-run `scripts/discover_spotify_writes.py` and change a playlist image while it watches |
 
 ---

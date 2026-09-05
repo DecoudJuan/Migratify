@@ -29,6 +29,7 @@ makes the tool feel better to use.
 ```bash
 pip install -e ".[dev]"        # core + test tooling
 pip install -e ".[login]"      # + browser automation, needed to sign in
+pip install -e ".[package]"    # + PyInstaller, for the standalone build
 
 ruff check .                   # what CI enforces
 ruff check --fix .
@@ -51,10 +52,18 @@ migratify login                # connect both services
 migratify auth status          # what is connected, which browsers were found
 migratify plan <playlist-url>  # read-only, always safe while iterating
 migratify runs                 # past runs, with their IDs
+migratify migrate liked --to ytmusic   # the saved library, not a playlist
+migratify sync <playlist-url>          # re-run, adding only what is new
+
+python scripts/build_exe.py    # standalone binary into dist/migratify/
 ```
 
 `plan` never writes to a music service. `apply` does — be deliberate about
 running it against a real account.
+
+`scripts/build_exe.py` builds *and then runs* the binary. Keep it that way: a
+PyInstaller bundle with a missing data file or dynamic import builds cleanly
+and fails on first launch, so building without checking proves nothing.
 
 ## Architecture
 
@@ -86,6 +95,7 @@ src/migratify/
   store/db.py        SQLite: runs, run_tracks, match_cache
   report.py          markdown / csv / json reports
   cli.py             Typer + Rich commands
+packaging/           PyInstaller spec + the frozen entry point
 tests/factories.py   make_track() -- imported as `from factories import ...`
 .claude/skills/      migratify-setup / -migrate / -review / -tune
 ```
@@ -98,6 +108,53 @@ per track → provider `build_queries` → provider `search` →
 `score.rank` → `score.decide` → `store.save_result` → `report.write`.
 
 `cli.apply` then reads the store and writes only what has a chosen candidate.
+
+### Liked Songs
+
+A saved library is not a playlist: it has no id, cannot be created, and each
+service hides it somewhere different. `providers/base.LIKED` is one neutral id
+for it, so the matcher, the store, the cache key and the reports never learn
+that it is special. A provider recognizes `LIKED` in `get_playlist`,
+`get_tracks` and `playlist_url`, and returns it from `parse_playlist_ref`.
+
+- **YouTube Music** addresses it as a playlist with the fixed id `LM`, so the
+  only work is translating the neutral id at the edges (`_native`). The
+  neutral id is what comes back out, so both directions key on the same thing.
+- **Spotify** does not. Pathfinder rejects `spotify:collection:tracks`
+  outright — it is not of type `PLAYLIST`. It lives in the **collection
+  service** instead: `POST spclient /collection/v2/paging` with
+  `set: "collection"`, which answers with the whole set at once and no
+  pagination cursor of any kind. That set is *mixed* — saved albums and liked
+  tracks share it, separated only by the URI kind. It returns URIs and nothing
+  else, so metadata comes from `decorateContextTracks`, an observed read
+  operation rather than a pinned one. Order is ours to impose: sort by
+  `added_at` descending, which is what the player shows.
+
+**Nothing is ever written into a saved library.** Liked songs migrate into an
+ordinary playlist on the destination, which is one click to undo; several
+hundred tracks added to someone's library are not. `LIKED` is a source id.
+
+### Sync
+
+`migratify sync` re-runs a migration and adds only what is new. It needed no
+new tables — the semantics fall out of two queries over `runs` and
+`run_tracks`:
+
+- `find_link(source_provider, source_playlist_id, target_provider)` — the most
+  recent run that actually created a destination playlist. Keyed on the
+  **destination service**, which is the whole point: a playlist already carried
+  to YouTube Music needs only its new tracks there, and still needs the whole
+  of itself anywhere it has never been. Adding a provider requires nothing
+  here. A *failed* run counts as a link too — it created the playlist and left
+  tracks in it.
+- `written_source_ids(...)` — source ids flagged `written`, read across every
+  run that filled that playlist, so a migration split over several attempts
+  knows the whole of what it did.
+
+Only `written` counts. A track left in review, skipped, or not found stays
+outstanding and is offered again next sync — the same reasoning that keeps
+misses out of the cache. `plan --sync` carries the linked playlist id onto the
+new run, so `apply` adds to it instead of creating a second one.
 
 ### Adding a provider
 
@@ -207,6 +264,11 @@ Everything runs offline — no credentials, no network, no cassettes.
 - `test_pipeline.py` runs the real `Matcher`, `Store` and report code against
   an in-memory provider implementing `MusicProvider`. If it passes and a real
   provider fails, the bug is in that provider.
+- `test_liked.py` pins the neutral-id translation and the Spotify enumeration:
+  saved albums filtered out, newest first, request order preserved even when
+  the decorator answers in another.
+- `test_sync.py` pins that a link belongs to one destination service and one
+  source playlist, and that only *written* tracks are ever skipped.
 
 **Any change to normalization or scoring must keep the golden set green.** If
 a case legitimately changes, change the expectation in the same commit and say

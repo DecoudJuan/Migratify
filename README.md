@@ -26,6 +26,10 @@ it is confident, it matches. When it is not, it asks you.
   longer does.
 - **Carries the playlist itself**, not just the tracks: name, description, and
   cover art.
+- **Liked Songs too** — your saved library migrates like any other playlist,
+  in either direction.
+- **Sync instead of re-migrating** — run it again later and only the tracks
+  you added since go across, into the same playlist.
 - **Precision-first matching** — weighted scoring over artist, title, duration,
   album and result type, with hard vetoes for wrong-artist and wrong-version
   matches.
@@ -36,6 +40,7 @@ it is confident, it matches. When it is not, it asks you.
 - **Resumable and idempotent** — every resolved match is cached in SQLite, so an
   interrupted run picks up where it stopped and a re-run costs no new searches.
 - **Reports** in Markdown, CSV or JSON, so you can audit exactly what happened.
+- **Ships as a binary** — a build with no Python installation required.
 
 ---
 
@@ -148,6 +153,46 @@ migratify migrate https://open.spotify.com/playlist/...
 migratify migrate https://music.youtube.com/playlist?list=...
 ```
 
+### Liked Songs
+
+Your saved library migrates like anything else. It is not a playlist on either
+service, so it has no URL to detect a direction from -- say where it is going:
+
+```bash
+migratify migrate liked --to ytmusic     # Spotify Liked Songs  -> YouTube Music
+migratify migrate liked --to spotify     # YouTube Music Liked  -> Spotify
+```
+
+Its own URL works too, if you would rather paste one:
+`https://open.spotify.com/collection/tracks` or
+`https://music.youtube.com/playlist?list=LM`. Either way it lands as an
+ordinary playlist on the other side -- **nothing is ever written into your
+saved library.** A playlist you did not want is one click to delete; several
+hundred tracks added to a library are not.
+
+`migratify playlists spotify` lists it alongside everything else, so you can
+see how many tracks you are about to move.
+
+### Syncing
+
+Already migrated a playlist and then added songs to it? Do not migrate it
+again -- sync it:
+
+```bash
+migratify sync https://open.spotify.com/playlist/...
+```
+
+This matches only the tracks that have not already reached the destination,
+and adds them to the playlist the earlier migration created rather than making
+a second one. Everything else is the same run of `plan` -> `review` -> `apply`,
+with the same read-only guarantee up front.
+
+The link is remembered **per destination service**. A playlist already carried
+to YouTube Music only needs its new tracks there -- and still migrates in full
+the first time it goes anywhere it has never been. `migratify sync` on a
+playlist that was never migrated refuses and tells you to run `migrate` once
+first, rather than quietly creating a second playlist.
+
 The direction is **detected from the URL** — a Spotify link migrates to
 YouTube Music, and vice versa. Pass `--to spotify` or `--to ytmusic` when you
 give a bare playlist ID.
@@ -165,6 +210,7 @@ one; `migratify runs` lists them.
 | `review` | no — records your decisions locally |
 | `apply` | **yes** — the only one |
 | `migrate` | yes — it ends in `apply`, and asks first |
+| `sync` | yes — same as `migrate`, but only the new tracks |
 
 ---
 
@@ -215,6 +261,31 @@ Thresholds are configurable in `.env`.
 generates one from the track artwork instead. Migratify still downloads the
 original cover to `~/.migratify/covers/` and tells you where it is, so you can
 upload it by hand if you want it.
+
+---
+
+## Running it without Python
+
+```bash
+pip install -e ".[login,package]"
+python scripts/build_exe.py
+```
+
+This produces `dist/migratify/`, a folder holding the executable and
+everything it needs — no Python installation on the target machine. Tagged
+releases build one per platform in CI.
+
+Two things about that build are deliberate:
+
+- **It is a folder, not a single file.** A one-file bundle unpacks itself on
+  every invocation, and Migratify is a CLI you run several times in a row.
+- **It includes the browser automation**, because signing in *is* the browser
+  automation. It does not include a browser: it drives the one you already
+  have.
+
+The build script runs the binary and fails if it cannot start. That check is
+the point — a bundle missing a data file builds perfectly and only breaks on
+first run.
 
 ---
 
@@ -280,6 +351,8 @@ pip install -e ".[dev]"
 ruff check .
 pytest
 ```
+
+Extras: `[login]` for browser automation, `[package]` for the binary build.
 
 The scorer is a pure function, so the golden set of hard matching cases runs
 entirely offline. See [CLAUDE.md](CLAUDE.md) for the architecture and the
