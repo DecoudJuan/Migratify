@@ -53,7 +53,7 @@ Double-clicking the executable no longer flashes a help screen and closes the
 window. Migratify with no arguments opens a prompt that stays:
 
 ```
- ▄▟███▙▄ ♪    Migratify v0.3.0
+ ▄▟███▙▄ ♪    Migratify v0.3.1
  ███◉███  ♫   Spotify · YouTube Music · connected, either direction
  ▀▜███▛▀ ♪    ~/.migratify · 3 runs
 

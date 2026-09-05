@@ -1,3 +1,3 @@
 """Migratify -- bidirectional playlist migration between Spotify and YouTube Music."""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
