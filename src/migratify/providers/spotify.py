@@ -34,6 +34,64 @@ PLAYLISTS_PAGE = 50
 MAX_COVER_BYTES = 256 * 1024
 
 
+def _spotify_message(response: httpx.Response) -> str:
+    """Spotify's own explanation, when it sent one.
+
+    Most errors arrive as ``{"error": {"message": ...}}``, but not all: the
+    Premium gate replies with a bare plain-text sentence and no JSON at all.
+    That is the single most important 403 to explain well, so falling back to
+    the raw body is not defensive padding -- without it the one message the
+    user most needs is the one we would drop.
+    """
+    try:
+        payload = response.json()
+    except Exception:
+        return response.text.strip()[:400]
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            return str(error.get("message") or "")
+        if isinstance(error, str):
+            return error
+    return response.text.strip()[:400]
+
+
+def _explain_403(response: httpx.Response) -> str:
+    """Turn a 403 into something the user can act on.
+
+    Spotify returns 403 for two very different situations, and guessing wrong
+    sends the user down the wrong path entirely:
+
+    * The **app owner has no Premium subscription**. Since 2025 this blocks
+      *every* Web API call from a registered app, even with all scopes
+      granted, and no amount of re-authenticating will fix it. Only the
+      sign-in path avoids it.
+    * A genuinely missing permission on the session.
+
+    So we lead with Spotify's own message rather than inventing a diagnosis --
+    an error that confidently states the wrong cause is worse than no
+    diagnosis at all.
+    """
+    message = _spotify_message(response)
+
+    if "premium" in message.lower():
+        return (
+            f"Spotify refused the request: {message}\n\n"
+            "This is the Premium gate on registered apps, not a problem with your "
+            "session -- since 2025 Spotify blocks all Web API access for apps whose "
+            "owner has no Premium subscription, and re-authenticating will not help.\n\n"
+            "Use the sign-in path instead, which registers no app and is unaffected:\n"
+            "  migratify login spotify"
+        )
+
+    detail = f": {message}" if message else "."
+    return (
+        f"Spotify refused this action (403){detail}\n"
+        "Run: migratify login spotify"
+    )
+
+
 class SpotifyProvider:
     name = Provider.SPOTIFY
     supports_cover_upload = True
@@ -69,10 +127,7 @@ class SpotifyProvider:
                 raise AuthError("Spotify rejected the session. Run: migratify login spotify")
 
             if response.status_code == 403:
-                raise AuthError(
-                    "Spotify refused this action (403). The session is missing a "
-                    "permission it needs.\nRun: migratify login spotify"
-                )
+                raise AuthError(_explain_403(response))
 
             if response.status_code >= 400:
                 raise ProviderError(f"Spotify {method} {path} failed ({response.status_code}): {response.text[:300]}")

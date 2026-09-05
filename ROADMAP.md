@@ -85,7 +85,7 @@ The core of the project. Pure, offline-testable, direction-agnostic.
 | ✅ | GitHub Actions: ruff + pytest on Linux, macOS and Windows |
 | ✅ | 60 offline tests — golden set plus an end-to-end pipeline over a fake provider |
 | ✅ | `/init` pass to validate `CLAUDE.md` against the finished tree |
-| ⬜ | First real end-to-end run, both directions, on a small playlist |
+| 🔨 | First real end-to-end run, both directions, on a small playlist — blocked on `migratify login spotify`, which needs an interactive sign-in |
 | ⬜ | Threshold calibration from that run |
 
 ---
@@ -119,7 +119,11 @@ These are properties of the platforms, not bugs to be fixed.
 - **The sign-in paths use non-public endpoints.** They are the ones that ask
   nothing of the user, and they will break someday. The official flows stay
   in the tree as fallbacks for that day.
-- **Spotify requires Premium to enable Web API access on a new app** (2025).
-  This is why signing in is the default and app registration is the fallback:
-  the official flow is simply unavailable on a free account. Migratify's
-  primary path is unaffected.
+- **Spotify requires Premium for Web API access on a registered app** (2025).
+  **Verified on 2026-09-05**, not assumed: a free account registered an app,
+  completed the PKCE flow and received a token with all six scopes granted --
+  and every Web API call returned 403, *"Active premium subscription required
+  for the owner of the app."* The gate is on the app owner's subscription and
+  no app configuration avoids it. This is why signing in is the default and
+  `--pkce` is the fallback; the primary path registers no app and is
+  unaffected.

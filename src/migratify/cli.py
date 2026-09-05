@@ -146,9 +146,46 @@ def login(
 # --- auth (fallbacks and status) --------------------------------------------
 
 
+def _stored_method(provider: Provider) -> str | None:
+    """How credentials for a service are stored, or None if there are none.
+
+    Says nothing about whether they *work* -- see `_verify`.
+    """
+    if provider is Provider.SPOTIFY:
+        if spotify_session.is_connected():
+            return "browser session"
+        from migratify.auth import spotify as pkce
+
+        return "OAuth PKCE" if pkce.load_token() is not None else None
+
+    return ytm_auth.describe() if ytm_auth.is_connected() else None
+
+
+def _verify(provider: Provider) -> str | None:
+    """Make one real call. Returns an error message, or None on success.
+
+    Stored credentials are not proof of a working connection: a Spotify token
+    issued to an app whose owner has no Premium subscription authenticates
+    perfectly and then 403s on every request. Reporting that as "connected"
+    sends the user hunting for a bug in the wrong place, so status earns the
+    word by actually using the credentials.
+    """
+    try:
+        get_provider(provider).list_playlists(limit=1)
+    except ProviderError as exc:
+        return str(exc).splitlines()[0]
+    except Exception as exc:  # an unexpected failure is still a failure to report
+        return f"{type(exc).__name__}: {exc}"
+    return None
+
+
 @auth_app.command("status")
-def auth_status() -> None:
-    """What is connected, and how."""
+def auth_status(
+    verify: bool = typer.Option(
+        True, "--verify/--no-verify", help="Make one real API call per service."
+    ),
+) -> None:
+    """What is connected, and whether it actually works."""
     settings = get_settings()
 
     table = Table(title="Connections")
@@ -156,22 +193,34 @@ def auth_status() -> None:
     table.add_column("Status")
     table.add_column("Method")
 
-    if spotify_session.is_connected():
-        table.add_row("Spotify", "[green]connected[/green]", "browser session")
-    else:
-        from migratify.auth import spotify as pkce
+    problems: list[str] = []
 
-        if pkce.load_token() is not None:
-            table.add_row("Spotify", "[green]connected[/green]", "OAuth PKCE")
+    for provider in (Provider.SPOTIFY, Provider.YTMUSIC):
+        method = _stored_method(provider)
+
+        if method is None:
+            table.add_row(
+                provider.label,
+                "[red]not connected[/red]",
+                f"run: migratify login {provider.value}",
+            )
+            continue
+
+        if not verify:
+            table.add_row(provider.label, "[dim]credentials stored[/dim]", method)
+            continue
+
+        error = _verify(provider)
+        if error is None:
+            table.add_row(provider.label, "[green]working[/green]", method)
         else:
-            table.add_row("Spotify", "[red]not connected[/red]", "run: migratify login spotify")
-
-    if ytm_auth.is_connected():
-        table.add_row("YouTube Music", "[green]connected[/green]", ytm_auth.describe())
-    else:
-        table.add_row("YouTube Music", "[red]not connected[/red]", "run: migratify login ytmusic")
+            table.add_row(provider.label, "[red]not working[/red]", method)
+            problems.append(f"[bold]{provider.label}[/bold]: {error}")
 
     console.print(table)
+
+    for problem in problems:
+        console.print(f"\n[red]![/red] {problem}")
 
     detected = browsers.installed_browsers()
     if detected:

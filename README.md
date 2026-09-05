@@ -108,8 +108,16 @@ day, the official flows stay in the tree:
 ```bash
 migratify auth ytmusic --paste   # paste request headers from devtools
 migratify auth ytmusic --oauth   # Google Cloud OAuth client
-migratify auth spotify --pkce    # your own Spotify app — needs Premium
+migratify auth spotify --pkce    # your own Spotify app — Premium only
 ```
+
+> **`--pkce` does not work without Spotify Premium.** This was verified
+> directly, not assumed. A free account can register an app, complete the OAuth
+> flow and receive a token with every scope granted — and then every single
+> Web API call returns 403: *"Active premium subscription required for the
+> owner of the app."* Nothing about the app's configuration changes this; the
+> gate is on the owner's subscription. `migratify login` registers no app and
+> is unaffected.
 
 `--paste` is also the right choice anywhere a browser window cannot open, such
 as over SSH or inside a container.
