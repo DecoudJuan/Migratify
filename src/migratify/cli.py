@@ -291,7 +291,9 @@ def playlists(
     table.add_column("ID", style="dim")
 
     for playlist in found:
-        table.add_row(playlist.name, str(playlist.track_count or "?"), playlist.id)
+        # "?" means we could not find out, which an empty playlist is not.
+        count = "?" if playlist.track_count is None else str(playlist.track_count)
+        table.add_row(playlist.name, count, playlist.id)
     console.print(table)
 
 
