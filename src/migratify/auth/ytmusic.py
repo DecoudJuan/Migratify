@@ -12,10 +12,15 @@ Three ways in, in order of how little they ask of the user:
 
 All three end at the same place: something ``ytmusicapi.YTMusic`` accepts.
 
-Authentication against Google's internal endpoints is cookie-based: given the
-``SAPISID`` cookie, ytmusicapi derives the ``Authorization: SAPISIDHASH ...``
-header itself on every request, so we only ever need to store the cookie
-header, never a derived credential that would go stale.
+Authentication is cookie-based: the ``Authorization: SAPISIDHASH ...`` header
+is derived from the ``SAPISID`` cookie, and ytmusicapi regenerates it on every
+request, so nothing time-sensitive is really being stored.
+
+It must still be *present* in the stored file, though. ytmusicapi decides which
+auth mode it is in by inspecting the headers, and with no ``authorization`` at
+all it defaults to OAuth and then fails asking for credentials that do not
+exist. Storing a freshly derived one both satisfies that check and makes the
+first request work.
 """
 
 from __future__ import annotations
@@ -46,6 +51,51 @@ BASE_HEADERS = {
 }
 
 
+#: Cookies that can carry the value the SAPISIDHASH is derived from, in the
+#: order Google's own clients prefer them.
+_SAPISID_COOKIES = ("SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID")
+
+
+def _cookie_value(cookie_header: str, name: str) -> str | None:
+    for part in cookie_header.split(";"):
+        key, _, value = part.strip().partition("=")
+        if key == name and value:
+            return value
+    return None
+
+
+def _authorization(cookie_header: str) -> str:
+    """Build the ``SAPISIDHASH`` authorization header for a cookie jar.
+
+    Required even though ytmusicapi recomputes this value on every request:
+    its auth-type detection keys off the header being present and containing
+    ``SAPISIDHASH``, and with no ``authorization`` at all it silently assumes
+    OAuth and then fails asking for credentials we do not have. Storing a
+    valid one makes the very first call work too.
+
+    The hash itself comes from ytmusicapi's own helper rather than a
+    reimplementation here, so the two can never drift apart.
+    """
+    from ytmusicapi.helpers import get_authorization
+
+    for name in _SAPISID_COOKIES:
+        value = _cookie_value(cookie_header, name)
+        if value:
+            return get_authorization(f"{value} {BASE_HEADERS['origin']}")
+
+    raise AuthError(
+        "The captured YouTube Music session has no SAPISID cookie, which means "
+        "it is not signed in.\nRun: migratify login ytmusic"
+    )
+
+
+def _browser_headers(cookie_header: str) -> dict[str, str]:
+    headers = dict(BASE_HEADERS)
+    headers["cookie"] = cookie_header
+    headers["authorization"] = _authorization(cookie_header)
+    return headers
+
+
 def _browser_file() -> Path:
     return get_settings().ytm_browser_file
 
@@ -72,9 +122,7 @@ def connect(prefer_installed: bool = True, prefer_browser: str | None = None) ->
         prefer_installed=prefer_installed,
         prefer_browser=prefer_browser,
     )
-    headers = dict(BASE_HEADERS)
-    headers["cookie"] = jar.header()
-    _write(_browser_file(), headers)
+    _write(_browser_file(), _browser_headers(jar.header()))
     log.info("YouTube Music session stored (from %s).", jar.source)
 
 
@@ -109,11 +157,9 @@ def save_pasted_headers(raw: str) -> None:
             "In music.youtube.com, open devtools > Network, click any request to "
             "/youtubei/v1/, and copy the full request headers."
         )
-    if "SAPISID" not in headers["cookie"]:
-        raise AuthError(
-            "The pasted Cookie header has no SAPISID, which means it is not a "
-            "signed-in session. Make sure you are logged in to YouTube Music."
-        )
+    # Pasted headers may already carry an authorization, but it will be an
+    # expired one; regenerate so both entry points store the same thing.
+    headers["authorization"] = _authorization(headers["cookie"])
 
     _write(_browser_file(), headers)
     log.info("YouTube Music headers stored.")
