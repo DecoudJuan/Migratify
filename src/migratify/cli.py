@@ -20,8 +20,6 @@ Commands:
 
 from __future__ import annotations
 
-import contextlib
-import sys
 import uuid
 
 import typer
@@ -35,30 +33,14 @@ from migratify import artwork
 from migratify import report as reporting
 from migratify.auth import browsers, spotify_web
 from migratify.auth import ytmusic as ytm_auth
-from migratify.config import get_settings, setup_logging
+from migratify.config import force_utf8_output, get_settings, setup_logging
 from migratify.matching.search import Matcher, accepted_ids, pending_review
 from migratify.models import Decision, MatchResult, Provider, Run, RunStatus
 from migratify.providers.base import ProviderError
 from migratify.providers.registry import get_provider, parse_ref, resolve_direction
 from migratify.store import Store
 
-
-def _force_utf8_output() -> None:
-    """Make stdout able to carry the characters music metadata actually uses.
-
-    Windows still defaults to a legacy code page (cp1252 here), and writing a
-    playlist name containing anything outside it raises UnicodeEncodeError
-    mid-render. Track and artist names are full of such characters, so this is
-    a normal case rather than an edge one.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            with contextlib.suppress(OSError, ValueError):
-                reconfigure(encoding="utf-8", errors="replace")
-
-
-_force_utf8_output()
+force_utf8_output()
 console = Console()
 
 app = typer.Typer(

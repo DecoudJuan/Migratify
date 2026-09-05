@@ -7,6 +7,7 @@ generated reports -- lives under ``~/.migratify`` (override with
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from dataclasses import dataclass, field
@@ -136,6 +137,23 @@ def get_settings() -> Settings:
     )
     settings.ensure_dirs()
     return settings
+
+
+def force_utf8_output() -> None:
+    """Make stdout able to carry the characters music metadata actually uses.
+
+    Windows still defaults to a legacy code page, and printing a track name
+    containing anything outside it raises UnicodeEncodeError mid-render. Track
+    and artist names are full of such characters, so this is the normal case
+    rather than an edge one.
+    """
+    import sys
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(OSError, ValueError):
+                reconfigure(encoding="utf-8", errors="replace")
 
 
 def setup_logging(verbose: bool = False) -> None:
