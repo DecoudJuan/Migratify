@@ -21,6 +21,9 @@ it is confident, it matches. When it is not, it asks you.
 
 - **Bidirectional** — Spotify → YouTube Music and YouTube Music → Spotify, same
   engine, same precision.
+- **You just sign in** — no developer app, no client ID, no API key, nothing
+  to paste. Works on a free Spotify account, which the official app flow no
+  longer does.
 - **Carries the playlist itself**, not just the tracks: name, description, and
   cover art.
 - **Precision-first matching** — weighted scoring over artist, title, duration,
@@ -41,49 +44,75 @@ it is confident, it matches. When it is not, it asks you.
 ```bash
 git clone https://github.com/DecoudJuan/Migratify.git
 cd Migratify
-pip install -e .
+pip install -e ".[login]"
 ```
 
-Requires Python 3.10+.
+Requires Python 3.10+. The `login` extra pulls in browser automation, which is
+what lets you connect an account by simply signing in.
 
 ---
 
-## Setup
-
-### Spotify
-
-1. Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Add `http://127.0.0.1:8888/callback` as a redirect URI.
-3. Copy `.env.example` to `.env` and set `MIGRATIFY_SPOTIFY_CLIENT_ID`.
-
-Migratify uses the **PKCE** flow — there is no client secret to store anywhere.
+## Connect your accounts
 
 ```bash
-migratify auth spotify
+migratify login
 ```
 
-### YouTube Music
+That is the whole setup. You sign in to Spotify and YouTube Music the way you
+always do, in a browser window.
 
-YouTube Music has no public write API, so Migratify uses
-[`ytmusicapi`](https://github.com/sigma67/ytmusicapi). Two ways to authenticate:
+**No developer app. No client ID. No API key. Nothing to paste.**
 
-```bash
-migratify auth ytmusic --browser   # fastest: paste headers from an open session
-migratify auth ytmusic --oauth     # longer setup, refreshes itself, doesn't expire
-```
+This is not a convenience — it is the only path that works for everyone.
+Since 2025 Spotify requires a **Premium** subscription to enable Web API
+access on a newly registered app, so the traditional "register an app and
+paste your client ID" flow is simply unavailable on a free account. Signing in
+does not touch that gate.
 
-- `--browser` takes about two minutes and needs no Google Cloud project, but the
-  session expires every so often and you re-paste.
-- `--oauth` needs a Google Cloud OAuth client of type *TV and Limited Input*,
-  then refreshes on its own indefinitely.
+Under the hood, `login` tries two things in order:
 
-Check what is connected:
+1. **Import a session from a browser you already use.** Instant and
+   click-free. Chrome, Edge, Brave, Comet, Arc, Vivaldi, Opera, Chromium,
+   Firefox, Zen, LibreWolf and Safari are all recognized, on macOS, Windows
+   and Linux.
+2. **Open a login window.** Driven against a browser you already have
+   installed, with a persistent profile in `~/.migratify/`. Every later
+   session refresh runs headless and invisible.
+
+Confirm it worked:
 
 ```bash
 migratify auth status
+migratify playlists spotify
 ```
 
+### Platform notes
+
+- **macOS** — direct import usually works, since there is no App-Bound
+  Encryption. Importing from Safari specifically needs Full Disk Access for
+  your terminal: System Settings → Privacy & Security → Full Disk Access.
+- **Windows** — Chrome and Edge encrypt cookies with App-Bound Encryption from
+  v127, so their sessions cannot be imported by any external process.
+  Migratify opens its own login window instead, automatically. Firefox imports
+  fine.
+- **Linux** — depends on your keyring, but generally works.
+
 All credentials live in `~/.migratify/` and never touch the repository.
+
+### Fallbacks
+
+The sign-in path uses endpoints that are not publicly documented. They are the
+ones that ask nothing of you, and someday one of them will change. For that
+day, the official flows stay in the tree:
+
+```bash
+migratify auth ytmusic --paste   # paste request headers from devtools
+migratify auth ytmusic --oauth   # Google Cloud OAuth client
+migratify auth spotify --pkce    # your own Spotify app — needs Premium
+```
+
+`--paste` is also the right choice anywhere a browser window cannot open, such
+as over SSH or inside a container.
 
 ---
 
@@ -98,10 +127,10 @@ migratify playlists ytmusic
 migratify plan https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
 
 # Resolve the ambiguous ones yourself
-migratify review <run-id>
+migratify review
 
 # Now actually create it on the other side
-migratify apply <run-id>
+migratify apply
 ```
 
 Or all three, guided:
@@ -111,8 +140,23 @@ migratify migrate https://open.spotify.com/playlist/...
 migratify migrate https://music.youtube.com/playlist?list=...
 ```
 
-The direction is **detected from the URL**. Pass `--to spotify` or
-`--to ytmusic` when you give a bare playlist ID.
+The direction is **detected from the URL** — a Spotify link migrates to
+YouTube Music, and vice versa. Pass `--to spotify` or `--to ytmusic` when you
+give a bare playlist ID.
+
+`review` and `apply` default to your most recent run, so the three commands
+can be typed in sequence with no arguments. Pass a run ID to target an older
+one; `migratify runs` lists them.
+
+### What each command does
+
+| Command | Writes to a music service? |
+|---|:---:|
+| `login`, `auth`, `playlists`, `runs`, `report` | no |
+| `plan` | **no** — matches everything and writes a report |
+| `review` | no — records your decisions locally |
+| `apply` | **yes** — the only one |
+| `migrate` | yes — it ends in `apply`, and asks first |
 
 ---
 
@@ -177,6 +221,32 @@ conversationally:
 | `migratify-migrate` | End-to-end migration in either direction |
 | `migratify-review` | Resolves the ambiguous queue — Claude reasons about discographies and context where fuzzy scoring can't break a tie |
 | `migratify-tune` | Analyzes a run's misses and proposes threshold changes |
+
+---
+
+## Troubleshooting
+
+**"Signing in needs a browser Migratify can drive"** — install the extra:
+`pip install "migratify[login]"`. Only if you have no Chromium-family browser
+at all do you also need `playwright install chromium`. Run
+`migratify auth status` to see which browsers were found.
+
+**Nothing was imported from my browser** — expected on Windows for Chrome and
+Edge; Migratify falls back to its own login window automatically. Let it.
+
+**The login window opened but nothing happened** — run it again. It closes when
+it detects the session cookie and can miss it if you signed in on another tab.
+The profile persists, so the retry is usually instant.
+
+**It worked yesterday and now says I am not connected** — the session expired.
+`migratify login <service>` again, adding `--fresh` to skip the import step.
+
+**Too many tracks went to review** — that is the design working, but it can be
+tuned. See the thresholds in `.env.example`, and the `migratify-tune` skill.
+
+**A wrong track got into the playlist** — this is the bug that matters most.
+Please open an issue with the source track and what it matched. Raising
+`MIGRATIFY_AUTO_ACCEPT` is the immediate workaround.
 
 ---
 

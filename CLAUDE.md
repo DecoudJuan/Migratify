@@ -36,8 +36,11 @@ src/migratify/
     ytmusic.py       YouTube Music as both source and destination
     registry.py      provider lookup by name + direction autodetection from URL
   auth/
-    spotify.py       OAuth PKCE, loopback server on 127.0.0.1:8888
-    ytmusic.py       dual backend: oauth | browser headers
+    browsers.py      catalog of installed browsers, per platform
+    browser.py       session capture: import, or a login window
+    spotify_session.py  web-player session -- the default Spotify path
+    spotify.py       OAuth PKCE -- fallback, needs a registered app
+    ytmusic.py       cookie session, plus paste-headers and OAuth fallbacks
   matching/
     normalize.py     title/artist normalization, version-tag extraction
     search.py        candidate collection across query strategies
@@ -46,6 +49,7 @@ src/migratify/
   store/db.py        SQLite: runs, tracks, matches; cache + resume
   report.py          markdown / csv / json reports
   cli.py             Typer + Rich commands
+.claude/skills/      migratify-setup / -migrate / -review / -tune
 ```
 
 ### Adding a provider
@@ -128,6 +132,20 @@ say why in the message.
   encoder in `artwork.py` iterates on size and quality to fit it.
 - **Spotify auth uses PKCE**, so there is no client secret anywhere in this
   project. Do not add one.
+- **Spotify gates Web API access on a Premium subscription** for newly
+  registered apps, as of 2025. This is why `migratify login` -- which
+  registers nothing -- is the default path and `--pkce` is the fallback, and
+  not the other way round. Never restructure the auth flow to lead with app
+  registration; it locks out every free account.
+- **Windows Chrome and Edge cookies cannot be read** by any external process
+  (App-Bound Encryption, v127+). `readable_browsers()` excludes them
+  deliberately rather than letting an import fail confusingly. The login
+  window exists for this case.
+- **We do not reimplement the Spotify web-player token handshake.** It is
+  guarded by a rotating TOTP scheme that changes without notice. We let the
+  real player perform it in a headless page and observe the result, so their
+  own client adapts on our behalf. Do not replace this with a direct call to
+  `/api/token`.
 
 ## Conventions
 

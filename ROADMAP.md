@@ -31,7 +31,7 @@ Goal: connecting an account means *signing in*. No developer dashboard, no API k
 | ✅ | Fallback: Spotify OAuth PKCE with a user-registered app | `feat(auth): Spotify OAuth PKCE` |
 | ✅ | Fallback: YouTube Music paste-headers and Google Cloud OAuth | `feat(auth): sign-in as default` |
 
-## Phase 3 — Matching engine 🔨
+## Phase 3 — Matching engine ✅
 
 The core of the project. Pure, offline-testable, direction-agnostic.
 
@@ -39,51 +39,52 @@ The core of the project. Pure, offline-testable, direction-agnostic.
 |---|---|---|
 | ✅ | Normalization: comparable title core + extracted version tags, featured-artist relocation, `- Topic`/VEVO stripping | `feat(matching): normalization` |
 | ✅ | Weighted scoring, artist veto, version penalty, ISRC short-circuit, ambiguity rule | `feat(matching): weighted scoring` |
-| 🔨 | Search orchestration: run each provider's query strategies, dedupe, rank, decide | — |
-| ⬜ | Golden set: same title/different artist, cover, live, remaster, displaced feat., translated title, sped-up, `- Topic` channel | — |
+| ✅ | Search orchestration: run each provider's query strategies, dedupe, rank, decide | `feat(matching): search orchestration` |
+| ✅ | Golden set: same title/different artist, cover, live, remaster, displaced feat., sped-up, `- Topic` channel | `test(matching): golden set` |
 
-## Phase 4 — Providers 🔨
+## Phase 4 — Providers ✅
 
 | | Item | Commit |
 |---|---|---|
-| 🔨 | Spotify: playlists, tracks, search with `isrc:`/`track:`/`artist:` filters, create, add, cover upload | — |
-| ⬜ | YouTube Music: playlists, tracks, song/video search, create, batched add | — |
+| ✅ | Spotify: playlists, tracks, search with `isrc:`/`track:`/`artist:` filters, create, add, cover upload | `feat(providers): both` |
+| ✅ | YouTube Music: playlists, tracks, song/video search, create, batched add | `feat(providers): both` |
 
-## Phase 5 — Persistence and metadata ⬜
-
-| | Item |
-|---|---|
-| ⬜ | SQLite store: `runs`, `tracks`, `matches` — direction-keyed match cache, resume, idempotency |
-| ⬜ | Artwork: cover download, JPEG reencode inside Spotify's hard 256 KB base64 limit, upload |
-| ⬜ | Playlist metadata carry-over: name, description, provenance line |
-
-## Phase 6 — Interface ⬜
+## Phase 5 — Persistence and metadata ✅
 
 | | Item |
 |---|---|
-| ⬜ | `migratify login` — one command, both services |
-| ⬜ | `migratify auth status`, `migratify playlists` |
-| ⬜ | `migratify plan` — read-only, writes a report, touches nothing |
-| ⬜ | `migratify review` — interactive resolution of the ambiguous queue |
-| ⬜ | `migratify apply` — create, upload metadata, add tracks |
-| ⬜ | `migratify migrate` — guided plan → review → apply |
-| ⬜ | Reports: markdown, CSV, JSON |
+| ✅ | SQLite store: `runs`, `tracks`, `matches` — direction-keyed match cache, resume, idempotency |
+| ✅ | Artwork: cover download, JPEG reencode inside Spotify's hard 256 KB base64 limit, upload |
+| ✅ | Playlist metadata carry-over: name, description, provenance line |
 
-## Phase 7 — Claude Code skills ⬜
+## Phase 6 — Interface ✅
 
 | | Item |
 |---|---|
-| ⬜ | `migratify-setup` — guided sign-in for both services |
-| ⬜ | `migratify-migrate` — conversational end-to-end migration, either direction |
-| ⬜ | `migratify-review` — resolve ambiguous matches by reasoning over discography and context, where fuzzy scoring cannot break a tie |
-| ⬜ | `migratify-tune` — analyze a run's misses, propose threshold and normalization changes |
+| ✅ | `migratify login` — one command, both services |
+| ✅ | `migratify auth status`, `migratify playlists`, `migratify runs` |
+| ✅ | `migratify plan` — read-only, writes a report, touches nothing |
+| ✅ | `migratify review` — interactive resolution of the ambiguous queue |
+| ✅ | `migratify apply` — create, upload metadata, add tracks, idempotent |
+| ✅ | `migratify migrate` — guided plan → review → apply |
+| ✅ | Reports: markdown, CSV, JSON |
 
-## Phase 8 — Quality ⬜
+## Phase 7 — Claude Code skills ✅
 
 | | Item |
 |---|---|
-| ⬜ | GitHub Actions: ruff + pytest |
-| ⬜ | `/init` pass to validate `CLAUDE.md` against the finished tree |
+| ✅ | `migratify-setup` — guided sign-in for both services |
+| ✅ | `migratify-migrate` — conversational end-to-end migration, either direction |
+| ✅ | `migratify-review` — resolve ambiguous matches by reasoning over discography and context, where fuzzy scoring cannot break a tie |
+| ✅ | `migratify-tune` — analyze a run's misses, propose threshold and normalization changes |
+
+## Phase 8 — Quality 🔨
+
+| | Item |
+|---|---|
+| ✅ | GitHub Actions: ruff + pytest on Linux, macOS and Windows |
+| ✅ | 60 offline tests — golden set plus an end-to-end pipeline over a fake provider |
+| 🔨 | `/init` pass to validate `CLAUDE.md` against the finished tree |
 | ⬜ | First real end-to-end run, both directions, on a small playlist |
 | ⬜ | Threshold calibration from that run |
 
@@ -118,3 +119,7 @@ These are properties of the platforms, not bugs to be fixed.
 - **The sign-in paths use non-public endpoints.** They are the ones that ask
   nothing of the user, and they will break someday. The official flows stay
   in the tree as fallbacks for that day.
+- **Spotify requires Premium to enable Web API access on a new app** (2025).
+  This is why signing in is the default and app registration is the fallback:
+  the official flow is simply unavailable on a free account. Migratify's
+  primary path is unaffected.
