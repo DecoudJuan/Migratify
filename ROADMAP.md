@@ -78,13 +78,13 @@ The core of the project. Pure, offline-testable, direction-agnostic.
 | ✅ | `migratify-review` — resolve ambiguous matches by reasoning over discography and context, where fuzzy scoring cannot break a tie |
 | ✅ | `migratify-tune` — analyze a run's misses, propose threshold and normalization changes |
 
-## Phase 8 — Quality 🔨
+## Phase 8 — Quality 🔨  (awaiting the first real run)
 
 | | Item |
 |---|---|
 | ✅ | GitHub Actions: ruff + pytest on Linux, macOS and Windows |
 | ✅ | 60 offline tests — golden set plus an end-to-end pipeline over a fake provider |
-| 🔨 | `/init` pass to validate `CLAUDE.md` against the finished tree |
+| ✅ | `/init` pass to validate `CLAUDE.md` against the finished tree |
 | ⬜ | First real end-to-end run, both directions, on a small playlist |
 | ⬜ | Threshold calibration from that run |
 
