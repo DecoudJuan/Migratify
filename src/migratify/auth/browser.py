@@ -204,6 +204,49 @@ def _session_cookies(context, domain: str) -> dict[str, str]:
     }
 
 
+def _is_closed_target(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "has been closed" in text or "target closed" in text
+
+
+def _window_closed_message(service_label: str, domain: str) -> str:
+    """Explain a closed login window, including the case we cannot fix.
+
+    Google refuses to sign you in inside an automation-controlled browser --
+    "this browser or app may not be secure". That is a deliberate protection on
+    their side, not a bug to defeat, so for YouTube Music the honest answer is
+    to point at the two routes that do work rather than to keep retrying.
+    """
+    lines = [f"The {service_label} window closed before the sign-in completed."]
+
+    if domain == YTM_DOMAIN:
+        lines += [
+            "",
+            "If Google said the browser 'may not be secure', that is expected:",
+            "it refuses sign-ins inside an automated browser. Two ways around it,",
+            "both of which avoid automation entirely:",
+            "",
+        ]
+        importable = [b.label for b in readable_browsers()]
+        if importable:
+            lines += [
+                f"  1. Sign in to music.youtube.com in {' or '.join(importable)}",
+                "     as you normally would, then run: migratify login ytmusic",
+                "     (Migratify can read the session from those browsers.)",
+            ]
+        else:
+            lines.append("  1. Sign in in Firefox, then run: migratify login ytmusic")
+        lines += [
+            "",
+            "  2. Paste the request headers instead:",
+            "     migratify auth ytmusic --paste",
+        ]
+    else:
+        lines.append("Run the command again to try once more.")
+
+    return "\n".join(lines)
+
+
 def login_window(
     url: str,
     domain: str,
@@ -256,13 +299,19 @@ def login_window(
                     break
 
                 if not context.pages:
-                    # The user closed the window. That is an answer, not a
-                    # crash -- do not make them wait out the full timeout.
-                    raise AuthError(
-                        f"The {service_label} window was closed before sign-in completed."
-                    )
+                    raise AuthError(_window_closed_message(service_label, domain))
 
-                page.wait_for_timeout(1000)
+                try:
+                    page.wait_for_timeout(1000)
+                except Exception as exc:
+                    # The window can close during the wait itself, so the check
+                    # above is necessary but not sufficient. Same situation,
+                    # same explanation -- not an internal error.
+                    if _is_closed_target(exc):
+                        raise AuthError(
+                            _window_closed_message(service_label, domain)
+                        ) from exc
+                    raise
             else:
                 raise AuthError(
                     f"Timed out waiting for the {service_label} sign-in.\n"
