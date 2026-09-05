@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "migratify"
+version = "0.1.0"
+description = "Migrate playlists between Spotify and YouTube Music with high-precision track matching."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Juan Decoud" }]
+keywords = ["spotify", "youtube-music", "playlist", "migration", "music"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+
+dependencies = [
+    "httpx>=0.27",
+    "ytmusicapi>=1.7",
+    "rapidfuzz>=3.9",
+    "typer>=0.12",
+    "rich>=13.7",
+    "pydantic>=2.7",
+    "platformdirs>=4.2",
+    "Pillow>=10.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/DecoudJuan/Migratify"
+Repository = "https://github.com/DecoudJuan/Migratify"
+Issues = "https://github.com/DecoudJuan/Migratify/issues"
+
+[project.scripts]
+migratify = "migratify.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/migratify"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]

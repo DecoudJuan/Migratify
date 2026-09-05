@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Credentials and local state -- NEVER commit these
+.env
+*.token.json
+spotify_token.json
+ytm_oauth.json
+ytm_browser.json
+browser.json
+oauth.json
+headers_auth.json
+migratify.db
+.migratify/
+covers/
+reports/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
