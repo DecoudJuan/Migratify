@@ -23,6 +23,7 @@ rather than the other way round.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,15 +187,21 @@ def _launch_kwargs(prefer: str | None = None) -> dict:
     return {}
 
 
-def _signed_in_predicate(session_cookie: str) -> str:
-    if session_cookie == YTM_SESSION_COOKIE:
-        # SAPISID is HttpOnly on Google domains and therefore invisible to
-        # document.cookie. Watch for the signed-in avatar instead.
-        return (
-            "() => !!document.querySelector("
-            "'img.ytmusic-settings-button, #avatar-btn, ytmusic-settings-button')"
-        )
-    return f"() => document.cookie.includes('{session_cookie}=')"
+def _session_cookies(context, domain: str) -> dict[str, str]:
+    """Cookies for a domain, as the browser itself sees them.
+
+    Asking the *context* rather than the page is the whole trick. Both session
+    cookies that matter here -- Spotify's ``sp_dc`` and Google's ``SAPISID`` --
+    are HttpOnly, so they are invisible to ``document.cookie`` and any
+    in-page check for them can never succeed. Playwright's cookie jar sees
+    them.
+    """
+    bare = domain.lstrip(".")
+    return {
+        c["name"]: c["value"]
+        for c in context.cookies()
+        if c["domain"].endswith(bare)
+    }
 
 
 def login_window(
@@ -204,47 +211,74 @@ def login_window(
     service_label: str,
     *,
     prefer_browser: str | None = None,
+    timeout_ms: int = _LOGIN_TIMEOUT_MS,
 ) -> CookieJar:
     """Open a browser window and wait for the user to sign in.
 
     Uses a persistent profile, so this is a one-time step per service: later
     runs reuse that profile headlessly and never show a window again.
+
+    Completion is detected by polling the browser's own cookie jar, not by
+    watching the page. Page-based detection was tried first and is a dead end:
+    the session cookies are HttpOnly, and every service renders a different
+    post-login page, so there is no reliable element to wait for either.
     """
     sync_playwright = _require_playwright()
 
     log.info("Opening a browser window -- sign in to %s as you normally would.", service_label)
+    log.info("Waiting for you to finish. The window closes itself when it detects the session.")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(profile_dir()),
-            headless=False,
-            args=["--no-first-run", "--no-default-browser-check"],
-            **_launch_kwargs(prefer_browser),
-        )
+        try:
+            context = p.chromium.launch_persistent_context(
+                str(profile_dir()),
+                headless=False,
+                args=["--no-first-run", "--no-default-browser-check"],
+                **_launch_kwargs(prefer_browser),
+            )
+        except Exception as exc:
+            # Distinguish this from a failed sign-in: nothing was ever shown
+            # to the user, so telling them to try signing in again is useless.
+            raise AuthError(
+                f"Could not open a browser window: {exc}\n\n"
+                "If no Chromium browser is installed, run: playwright install chromium"
+            ) from exc
+
+        cookies: dict[str, str] = {}
         try:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function(_signed_in_predicate(session_cookie), timeout=_LOGIN_TIMEOUT_MS)
 
-            cookies = {
-                c["name"]: c["value"]
-                for c in context.cookies()
-                if c["domain"].endswith(domain.lstrip("."))
-            }
-            jar = CookieJar(cookies, source="Migratify login window")
+            deadline = time.monotonic() + timeout_ms / 1000
+            while time.monotonic() < deadline:
+                cookies = _session_cookies(context, domain)
+                if cookies.get(session_cookie):
+                    break
+
+                if not context.pages:
+                    # The user closed the window. That is an answer, not a
+                    # crash -- do not make them wait out the full timeout.
+                    raise AuthError(
+                        f"The {service_label} window was closed before sign-in completed."
+                    )
+
+                page.wait_for_timeout(1000)
+            else:
+                raise AuthError(
+                    f"Timed out waiting for the {service_label} sign-in.\n"
+                    "Run the command again, and complete the sign-in in the window that opens."
+                )
+        except AuthError:
+            raise
         except Exception as exc:
             raise AuthError(
-                f"Did not detect a completed {service_label} sign-in.\n"
-                "If you did sign in, run the command again -- the window closed too early."
+                f"The {service_label} sign-in did not complete: {exc}"
             ) from exc
         finally:
             context.close()
 
-    if not jar.has(session_cookie):
-        raise AuthError(f"Signed in to {service_label}, but no session cookie was set.")
-
     log.info("%s connected.", service_label)
-    return jar
+    return CookieJar(cookies, source="Migratify login window")
 
 
 def headless_visit(
