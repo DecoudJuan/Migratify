@@ -9,6 +9,7 @@ the damage shows up much later as bad matching.
 from __future__ import annotations
 
 from migratify.models import Provider
+from migratify.providers.base import LIKED
 from migratify.providers.spotify_shapes import (
     best_image,
     dig,
@@ -120,8 +121,8 @@ class TestCollections:
         payload = {"searchV2": {"tracksV2": {"items": [{"item": {"data": SEARCH_TRACK}}]}}}
         assert [t.title for t in parse_search_tracks(payload)] == ["Hurt"]
 
-    def test_library_keeps_only_real_playlists(self) -> None:
-        """Artists, albums and the liked-songs pseudo-playlist live here too."""
+    def test_library_drops_everything_that_is_not_a_playlist(self) -> None:
+        """Artists and albums live in the library too."""
         payload = {
             "me": {
                 "libraryV3": {
@@ -130,14 +131,37 @@ class TestCollections:
                                   "data": {"__typename": "Playlist", "name": "Mine"}}},
                         {"item": {"_uri": "spotify:artist:xyz",
                                   "data": {"__typename": "Artist", "name": "Someone"}}},
+                        {"item": {"_uri": "spotify:album:def",
+                                  "data": {"__typename": "Album", "name": "A Record"}}},
+                    ]
+                }
+            }
+        }
+        assert [p.name for p in parse_library(payload)] == ["Mine"]
+
+    def test_library_keeps_liked_songs_under_the_neutral_id(self) -> None:
+        """It arrives as a PseudoPlaylist, and it is the thing most worth migrating."""
+        payload = {
+            "me": {
+                "libraryV3": {
+                    "items": [
                         {"item": {"_uri": "spotify:collection:tracks",
-                                  "data": {"__typename": "PseudoPlaylist", "name": "Liked"}}},
+                                  "data": {"__typename": "PseudoPlaylist", "count": 51,
+                                           "image": {"sources": [
+                                               {"url": "liked.jpg", "width": 300,
+                                                "height": 300}]}}}},
+                        # Another pseudo-playlist -- episodes, not liked songs.
+                        {"item": {"_uri": "spotify:collection:your-episodes",
+                                  "data": {"__typename": "PseudoPlaylist", "count": 3}}},
                     ]
                 }
             }
         }
         playlists = parse_library(payload)
-        assert [p.name for p in playlists] == ["Mine"]
+        assert [(p.id, p.name, p.track_count) for p in playlists] == [
+            (LIKED, "Liked Songs", 51)
+        ]
+        assert playlists[0].cover_url == "liked.jpg"
 
     def test_playlist_metadata(self) -> None:
         payload = {

@@ -22,7 +22,7 @@ from migratify.auth.spotify_web import SpotifyWebClient
 from migratify.config import get_logger
 from migratify.models import Playlist, Provider, Track
 from migratify.providers import spotify_shapes as shapes
-from migratify.providers.base import ProviderError, SearchQuery
+from migratify.providers.base import LIKED, ProviderError, SearchQuery
 
 log = get_logger(__name__)
 
@@ -41,6 +41,14 @@ COUNT_WORKERS = 6
 #: Spotify rejects a cover above 256 KB once base64-encoded.
 MAX_COVER_BYTES = 256 * 1024
 
+#: The collection service answers in one shot rather than paginating, so ask
+#: for more than anyone's library holds and take what comes back.
+COLLECTION_LIMIT = 100_000
+
+#: How many track URIs to decorate per call. 50 is what the player itself
+#: sends, and a batch that big is still one small request.
+DECORATE_BATCH = 50
+
 
 class SpotifyProvider:
     name = Provider.SPOTIFY
@@ -49,6 +57,7 @@ class SpotifyProvider:
     def __init__(self) -> None:
         self._client = SpotifyWebClient()
         self._user_id: str | None = None
+        self._liked: list[str] | None = None
 
     # -- identity ------------------------------------------------------------
 
@@ -107,6 +116,9 @@ class SpotifyProvider:
         """
 
         def fetch(playlist: Playlist) -> None:
+            # Liked Songs already carries its count and has no /metadata.
+            if playlist.id == LIKED:
+                return
             try:
                 response = self._client.spclient(
                     "GET", f"/playlist/v2/playlist/{playlist.id}/metadata"
@@ -119,13 +131,93 @@ class SpotifyProvider:
         with ThreadPoolExecutor(max_workers=COUNT_WORKERS) as pool:
             list(pool.map(fetch, playlists))
 
+    def _liked_uris(self) -> list[str]:
+        """Every liked track, newest first, as Spotify URIs.
+
+        Liked Songs is not a playlist and pathfinder refuses to treat it as
+        one -- ``fetchPlaylistContents`` rejects ``spotify:collection:tracks``
+        outright. It lives in the *collection* service instead, which returns
+        the whole set in a single call with no pagination cursor of any kind.
+
+        That set is mixed: saved albums and liked tracks share it, separated
+        only by the URI kind. Ordering is ours to impose -- the service answers
+        in an order of its own -- so we sort by ``added_at`` descending, which
+        is the order the player shows and the order a person expects their
+        migrated playlist to be in.
+
+        Cached for the life of the provider because ``plan`` asks for the
+        playlist and then its tracks, and one request should serve both.
+        """
+        if self._liked is not None:
+            return self._liked
+
+        response = self._client.spclient(
+            "POST",
+            "/collection/v2/paging",
+            json={"username": self._me(), "set": "collection", "limit": COLLECTION_LIMIT},
+        )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"Could not read your Spotify Liked Songs ({response.status_code}). "
+                "Run: migratify login spotify"
+            )
+
+        items = [
+            item
+            for item in (response.json() or {}).get("items") or []
+            if str(item.get("uri", "")).startswith("spotify:track:")
+        ]
+        # added_at arrives as a string of seconds; sort numerically, and put
+        # anything missing one last rather than letting it raise.
+        items.sort(key=lambda i: int(i.get("added_at") or 0), reverse=True)
+
+        self._liked = [item["uri"] for item in items]
+        return self._liked
+
+    def _liked_tracks(self) -> list[Track]:
+        """Metadata for the liked tracks, in the order they were liked.
+
+        The collection service returns URIs and nothing else, so the metadata
+        comes from ``decorateContextTracks`` -- an observed read operation,
+        not a pinned one, so it survives a web-player release the same way the
+        rest of the read path does.
+        """
+        uris = self._liked_uris()
+        tracks: list[Track] = []
+
+        for start in range(0, len(uris), DECORATE_BATCH):
+            batch = uris[start : start + DECORATE_BATCH]
+            data = self._client.query("decorateContextTracks", {"uris": batch})
+            by_id = shapes.parse_decorated_tracks(data)
+            # Walk the batch, not the response: the response order is not
+            # promised, and a track that failed to decorate should drop out
+            # rather than shift everything after it.
+            for uri in batch:
+                track = by_id.get(shapes.id_from_uri(uri) or "")
+                if track is not None:
+                    tracks.append(track)
+
+        return tracks
+
     def get_playlist(self, playlist_id: str) -> Playlist:
+        if playlist_id == LIKED:
+            return Playlist(
+                provider=Provider.SPOTIFY,
+                id=LIKED,
+                name="Liked Songs",
+                track_count=len(self._liked_uris()),
+                url=self.playlist_url(LIKED),
+            )
+
         data = self._client.query(
             "fetchPlaylistMetadata", {"uri": f"spotify:playlist:{playlist_id}"}
         )
         return shapes.parse_playlist(data, playlist_id)
 
     def get_tracks(self, playlist_id: str) -> list[Track]:
+        if playlist_id == LIKED:
+            return self._liked_tracks()
+
         uri = f"spotify:playlist:{playlist_id}"
         tracks: list[Track] = []
         offset = 0
@@ -362,11 +454,19 @@ class SpotifyProvider:
     # -- identity ------------------------------------------------------------
 
     def playlist_url(self, playlist_id: str) -> str:
+        if playlist_id == LIKED:
+            return "https://open.spotify.com/collection/tracks"
         return f"https://open.spotify.com/playlist/{playlist_id}"
 
     @staticmethod
     def parse_playlist_ref(ref: str) -> str | None:
         ref = ref.strip()
+        if ref.casefold() in {"liked", "liked songs", "liked-songs", "liked_songs"}:
+            return LIKED
+        if ref == "spotify:collection:tracks":
+            return LIKED
+        if "open.spotify.com" in ref and "/collection/tracks" in ref:
+            return LIKED
         if "open.spotify.com" in ref and "/playlist/" in ref:
             tail = ref.split("/playlist/", 1)[1]
             return tail.split("?", 1)[0].split("/", 1)[0] or None

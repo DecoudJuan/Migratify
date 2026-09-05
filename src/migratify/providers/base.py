@@ -15,6 +15,22 @@ from typing import Protocol, runtime_checkable
 
 from migratify.models import Playlist, Provider, Track
 
+#: The pseudo-playlist id for a service's own saved-tracks library --
+#: "Liked Songs" on Spotify, "Liked Music" on YouTube Music.
+#:
+#: A saved library is not a playlist: it has no id of its own, it cannot be
+#: created, and each service addresses it differently. Giving it one neutral
+#: id here means the rest of Migratify -- the matcher, the store, the cache
+#: key, the reports -- never learns that it is special. A provider recognizes
+#: this value in :meth:`MusicProvider.get_playlist`, :meth:`get_tracks` and
+#: :meth:`playlist_url`, and returns it from :meth:`parse_playlist_ref` for
+#: whatever its own saved-tracks reference looks like.
+#:
+#: It is a *source* id only. Nothing writes into a saved library: liked songs
+#: migrate into an ordinary playlist on the destination, which is one command
+#: to undo. Adding several hundred tracks to someone's library is not.
+LIKED = "liked"
+
 
 class ProviderError(RuntimeError):
     """A provider call failed in a way the user may be able to act on."""
@@ -73,10 +89,16 @@ class MusicProvider(Protocol):
         """The authenticated account's playlists."""
 
     def get_playlist(self, playlist_id: str) -> Playlist:
-        """Playlist metadata: name, description, cover URL, owner."""
+        """Playlist metadata: name, description, cover URL, owner.
+
+        Must accept :data:`LIKED` and answer for the saved-tracks library.
+        """
 
     def get_tracks(self, playlist_id: str) -> list[Track]:
-        """Every track in the playlist, in order, paginating as needed."""
+        """Every track in the playlist, in order, paginating as needed.
+
+        Must accept :data:`LIKED` and enumerate the saved-tracks library.
+        """
 
     # -- searching (as a destination) ----------------------------------------
 
@@ -123,6 +145,6 @@ class MusicProvider(Protocol):
     def parse_playlist_ref(ref: str) -> str | None:
         """Extract a playlist ID from a URL, URI or bare ID.
 
-        Returns None when the reference clearly does not belong to this
-        provider.
+        Returns :data:`LIKED` for this service's saved-tracks reference, and
+        None when the reference clearly does not belong to this provider.
         """

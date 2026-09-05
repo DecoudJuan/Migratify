@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from migratify.models import Playlist, Provider, ResultKind, Track
+from migratify.providers.base import LIKED
 
 
 def dig(data: Any, *path: str | int, default: Any = None) -> Any:
@@ -140,6 +141,20 @@ def parse_search_tracks(payload: dict) -> list[Track]:
     return tracks
 
 
+def parse_decorated_tracks(payload: dict) -> dict[str, Track]:
+    """Tracks from a ``decorateContextTracks`` response, keyed by id.
+
+    Returned as a mapping rather than a list because the caller already knows
+    the order it asked for -- and the response is not required to preserve it.
+    """
+    tracks: dict[str, Track] = {}
+    for node in dig(payload, "tracks", default=[]) or []:
+        track = parse_track(node)
+        if track is not None:
+            tracks[track.id] = track
+    return tracks
+
+
 def parse_playlist(payload: dict, playlist_id: str) -> Playlist:
     """Playlist metadata from ``fetchPlaylistMetadata`` or ``fetchPlaylist``."""
     node = payload.get("playlistV2") or {}
@@ -162,9 +177,14 @@ def parse_playlist(payload: dict, playlist_id: str) -> Playlist:
 def parse_library(payload: dict) -> list[Playlist]:
     """Playlists from ``libraryV3``.
 
-    The library is heterogeneous -- artists, albums and the pseudo-playlist for
-    liked songs all live alongside real playlists -- so everything that is not
-    a genuine playlist is filtered out here rather than surprising the caller.
+    The library is heterogeneous -- artists and albums live alongside real
+    playlists -- so anything that is not a playlist is filtered out here rather
+    than surprising the caller.
+
+    The one exception is Liked Songs, which arrives as a ``PseudoPlaylist``
+    under ``spotify:collection:tracks``. It is kept, under the neutral
+    :data:`~migratify.providers.base.LIKED` id, because a listing that omits it
+    hides the largest thing most people actually want to migrate.
     """
     library = dig(payload, "me", "libraryV3", default={}) or {}
     playlists: list[Playlist] = []
@@ -172,6 +192,23 @@ def parse_library(payload: dict) -> list[Playlist]:
     for entry in library.get("items") or []:
         item = entry.get("item") or {}
         data = item.get("data") or {}
+
+        if data.get("__typename") == "PseudoPlaylist":
+            if (item.get("_uri") or data.get("uri")) != "spotify:collection:tracks":
+                continue
+            playlists.append(
+                Playlist(
+                    provider=Provider.SPOTIFY,
+                    id=LIKED,
+                    # The node carries no name -- only a count and an image.
+                    name="Liked Songs",
+                    cover_url=best_image(dig(data, "image", "sources")),
+                    track_count=data.get("count"),
+                    url="https://open.spotify.com/collection/tracks",
+                )
+            )
+            continue
+
         if data.get("__typename") != "Playlist":
             continue
 

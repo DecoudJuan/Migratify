@@ -19,13 +19,18 @@ import re
 from migratify.auth import ytmusic as ytm_auth
 from migratify.config import get_logger
 from migratify.models import Playlist, Provider, ResultKind, Track
-from migratify.providers.base import ProviderError, SearchQuery
+from migratify.providers.base import LIKED, ProviderError, SearchQuery
 
 log = get_logger(__name__)
 
 #: ytmusicapi accepts arbitrarily long lists but the underlying call degrades;
 #: batching keeps each request small enough to retry cheaply.
 ADD_BATCH = 50
+
+#: YouTube Music addresses the saved library as a playlist with a fixed id.
+#: Unlike Spotify's, it reads exactly like any other playlist -- so the only
+#: work here is translating the neutral id at the edges.
+LIKED_PLAYLIST = "LM"
 
 #: Values that appear in the artist slot but are not artists.
 _NON_ARTIST = {"song", "video", "single", "album", "ep", "playlist", ""}
@@ -120,8 +125,26 @@ class YouTubeMusicProvider:
 
     # -- reading -------------------------------------------------------------
 
+    def _liked_playlist(self) -> Playlist | None:
+        """Liked Music as a listing row.
+
+        ``get_library_playlists`` does not include it, and a listing that
+        leaves it out hides the one library most people want to migrate. It is
+        a nicety though, so a failure here costs the row and not the listing.
+        """
+        try:
+            return self.get_playlist(LIKED)
+        except ProviderError:
+            log.debug("Could not read Liked Music for the listing", exc_info=True)
+            return None
+
     def list_playlists(self, limit: int = 50) -> list[Playlist]:
         playlists = []
+
+        liked = self._liked_playlist()
+        if liked is not None:
+            playlists.append(liked)
+
         for raw in self._client.get_library_playlists(limit=limit):
             playlists.append(
                 Playlist(
@@ -136,9 +159,13 @@ class YouTubeMusicProvider:
             )
         return [p for p in playlists if p.id]
 
+    @staticmethod
+    def _native(playlist_id: str) -> str:
+        return LIKED_PLAYLIST if playlist_id == LIKED else playlist_id
+
     def _fetch(self, playlist_id: str, limit: int | None = None) -> dict:
         try:
-            return self._client.get_playlist(playlist_id, limit=limit)
+            return self._client.get_playlist(self._native(playlist_id), limit=limit)
         except Exception as exc:
             raise ProviderError(
                 f"Could not read YouTube Music playlist {playlist_id}: {exc}"
@@ -148,6 +175,8 @@ class YouTubeMusicProvider:
         raw = self._fetch(playlist_id, limit=1)
         return Playlist(
             provider=Provider.YTMUSIC,
+            # The neutral id goes back out, not the native one, so the store
+            # and the match cache key on the same thing in both directions.
             id=playlist_id,
             name=raw.get("title", "Untitled"),
             description=raw.get("description"),
@@ -277,14 +306,20 @@ class YouTubeMusicProvider:
     # -- identity ------------------------------------------------------------
 
     def playlist_url(self, playlist_id: str) -> str:
-        return f"https://music.youtube.com/playlist?list={playlist_id}"
+        return f"https://music.youtube.com/playlist?list={self._native(playlist_id)}"
 
     @staticmethod
     def parse_playlist_ref(ref: str) -> str | None:
         ref = ref.strip()
+        if ref.casefold() in {"liked", "liked songs", "liked-songs", "liked_songs"}:
+            return LIKED
+        if ref == LIKED_PLAYLIST:
+            return LIKED
         if "list=" in ref:
-            tail = ref.split("list=", 1)[1]
-            return tail.split("&", 1)[0] or None
+            tail = ref.split("list=", 1)[1].split("&", 1)[0]
+            if not tail:
+                return None
+            return LIKED if tail == LIKED_PLAYLIST else tail
         # YouTube playlist IDs are prefixed by kind: PL user, VL library,
         # OLAK5uy auto-generated album, RDCLAK5uy radio.
         if re.fullmatch(r"(?:PL|VL|OLAK5uy_|RDCLAK5uy_|LM)[A-Za-z0-9_-]+", ref):
