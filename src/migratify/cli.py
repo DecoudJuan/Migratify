@@ -14,6 +14,7 @@ Commands:
     review      resolve the ambiguous matches yourself
     apply       create the playlist and write the accepted tracks
     migrate     the three above, guided
+    sync        migrate again, adding only what is new
     report      re-render a finished run
     runs        what you have done before
     help        all of the above, on one screen
@@ -83,6 +84,35 @@ def _resolve_run(store: Store, run_id: str | None) -> Run:
     if run is None:
         _fail("No run found. Start with: migratify plan <playlist-url>")
     return run  # type: ignore[return-value]
+
+
+def _sync_target(
+    store: Store,
+    source_provider: Provider,
+    target_provider: Provider,
+    playlist_id: str,
+    playlist_name: str,
+) -> str:
+    """The destination playlist an earlier run filled, for a sync to top up.
+
+    A sync is only meaningful against a playlist that already exists on the
+    destination. Without a link there is nothing to add to and nothing to skip,
+    so this refuses rather than quietly creating a second playlist -- and says
+    which command does the first migration.
+
+    The link is per destination service. The same source playlist can be
+    synced to one service while still needing a full migration to another,
+    which is what makes this keep working as providers are added.
+    """
+    link = store.find_link(source_provider, playlist_id, target_provider)
+    if link is None or not link.target_playlist_id:
+        _fail(
+            f"{playlist_name!r} has never been migrated to {target_provider.label}, "
+            "so there is nothing to sync against.\n"
+            "Migrate it once first: migratify migrate <playlist-url>"
+        )
+        raise AssertionError("unreachable")  # pragma: no cover
+    return link.target_playlist_id
 
 
 def _decision_style(decision: Decision) -> str:
@@ -302,11 +332,16 @@ def playlists(
 
 @app.command()
 def plan(
-    playlist: str = typer.Argument(..., help="Playlist URL or ID."),
+    playlist: str = typer.Argument(..., help="Playlist URL or ID, or 'liked' for your saved library."),
     to: str | None = typer.Option(None, "--to", help="Destination service."),
     source: str | None = typer.Option(None, "--from", help="Source service."),
     fmt: str = typer.Option("md", "--format", help="md, csv or json."),
     no_cache: bool = typer.Option(False, "--no-cache", help="Re-search everything."),
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="Only match tracks not already migrated to this destination.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Match a playlist against the destination and write a report.
@@ -333,25 +368,51 @@ def plan(
     if not tracks:
         _fail(f"{source_playlist.name!r} has no tracks to migrate.")
 
-    console.print(
-        Panel(
-            f"[bold]{source_playlist.name}[/bold]\n"
-            f"{len(tracks)} tracks · {source_provider.label} → {target_provider.label}",
-            title="Planning",
-        )
-    )
-
-    run = Run(
-        id=uuid.uuid4().hex[:12],
-        source_provider=source_provider,
-        target_provider=target_provider,
-        source_playlist_id=playlist_id,
-        source_playlist_name=source_playlist.name,
-        total=len(tracks),
-    )
-
     settings = get_settings()
     with Store() as store:
+        target_playlist_id: str | None = None
+
+        if sync:
+            target_playlist_id = _sync_target(
+                store, source_provider, target_provider, playlist_id,
+                source_playlist.name,
+            )
+            already = store.written_source_ids(
+                source_provider, playlist_id, target_provider, target_playlist_id
+            )
+            fresh = [track for track in tracks if track.id not in already]
+
+            if not fresh:
+                console.print(
+                    f"[green]Already up to date.[/green] All {len(tracks)} tracks "
+                    f"are already in the {target_provider.label} playlist."
+                )
+                return
+
+            console.print(
+                f"[dim]{len(already)} already migrated, {len(fresh)} new[/dim]"
+            )
+            tracks = fresh
+
+        console.print(
+            Panel(
+                f"[bold]{source_playlist.name}[/bold]\n"
+                f"{len(tracks)} tracks · {source_provider.label} → {target_provider.label}",
+                title="Syncing" if sync else "Planning",
+            )
+        )
+
+        run = Run(
+            id=uuid.uuid4().hex[:12],
+            source_provider=source_provider,
+            target_provider=target_provider,
+            source_playlist_id=playlist_id,
+            source_playlist_name=source_playlist.name,
+            # Carried from the earlier migration, so apply adds to that
+            # playlist rather than creating a second one beside it.
+            target_playlist_id=target_playlist_id,
+            total=len(tracks),
+        )
         store.create_run(run)
         matcher = Matcher(
             dst,
@@ -584,20 +645,36 @@ def apply(
 
 @app.command()
 def migrate(
-    playlist: str = typer.Argument(..., help="Playlist URL or ID."),
+    playlist: str = typer.Argument(..., help="Playlist URL or ID, or 'liked' for your saved library."),
     to: str | None = typer.Option(None, "--to"),
     source: str | None = typer.Option(None, "--from"),
     public: bool = typer.Option(False, "--public"),
+    sync: bool = typer.Option(
+        False, "--sync", help="Add only what is new to a playlist already migrated."
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Plan, review and apply in one guided pass."""
     # Typer leaves the decorated functions callable, so the guided flow is
     # literally the three commands in sequence -- no duplicated logic.
-    plan(playlist=playlist, to=to, source=source, fmt="md", no_cache=False, verbose=verbose)
+    plan(
+        playlist=playlist,
+        to=to,
+        source=source,
+        fmt="md",
+        no_cache=False,
+        sync=sync,
+        verbose=verbose,
+    )
 
     with Store() as store:
         run = _resolve_run(store, None)
         needs = pending_review(store.load_results(run.id))
+
+    # An up-to-date sync plans nothing, so the latest run is the previous
+    # migration -- already applied, and not ours to apply again.
+    if sync and run.status is RunStatus.APPLIED:
+        return
 
     if needs:
         review(run_id=run.id, verbose=verbose)
@@ -608,6 +685,28 @@ def migrate(
         public=public,
         no_attribution=False,
         yes=False,
+        verbose=verbose,
+    )
+
+
+@app.command()
+def sync(
+    playlist: str = typer.Argument(..., help="Playlist URL or ID, or 'liked' for your saved library."),
+    to: str | None = typer.Option(None, "--to"),
+    source: str | None = typer.Option(None, "--from"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Re-run a migration, adding only the tracks that are new.
+
+    Matches nothing that already reached the destination, and adds to the
+    playlist the earlier run created instead of making another one.
+    """
+    migrate(
+        playlist=playlist,
+        to=to,
+        source=source,
+        public=False,
+        sync=True,
         verbose=verbose,
     )
 
@@ -666,10 +765,11 @@ _COMMANDS: list[tuple[str, str, str]] = [
     ("auth status", "[--no-verify]", "What is connected, and which browsers can be read."),
     ("auth ytmusic", "[--paste | --oauth]", "Fallback YouTube Music sign-in."),
     ("playlists", "<service>", "List your playlists on a service."),
-    ("plan", "<playlist> [--to S] [--from S]", "Match every track and write a report. Never writes."),
+    ("plan", "<playlist> [--to S] [--from S] [--sync]", "Match every track and write a report. Never writes."),
     ("review", "[run-id]", "Resolve the ambiguous matches yourself."),
     ("apply", "[run-id] [--name N] [--public]", "Create the playlist and write the accepted tracks."),
     ("migrate", "<playlist> [--to S]", "plan -> review -> apply, guided."),
+    ("sync", "<playlist> [--to S]", "Migrate again, adding only the tracks that are new."),
     ("report", "[run-id] [--format md|csv|json]", "Re-render a finished run."),
     ("runs", "[--limit N]", "Past runs, with their IDs."),
     ("help", "", "This overview."),
@@ -705,8 +805,18 @@ def help_cmd() -> None:
     console.print("  2. migratify plan <playlist-url>      [dim]read-only, safe to repeat[/dim]")
     console.print("  3. migratify review                   [dim]decide the ambiguous ones[/dim]")
     console.print("  4. migratify apply                    [dim]this is the one that writes[/dim]")
+
+    console.print("\n[bold]Beyond one playlist[/bold]")
+    console.print(
+        "  migratify migrate liked --to ytmusic   [dim]your saved library, not a playlist[/dim]"
+    )
+    console.print(
+        "  migratify sync <playlist-url>          [dim]migrate again, adding only what is new[/dim]"
+    )
+
     console.print(
         "\n[dim]The direction is read from the playlist URL; --to and --from override it."
+        "\n'liked' belongs to no service on its own, so it needs --to or --from."
         "\nAny command takes --help for its own options.[/dim]"
     )
 
