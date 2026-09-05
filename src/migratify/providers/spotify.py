@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from migratify.auth.spotify_web import SpotifyWebClient
 from migratify.config import get_logger
@@ -32,6 +33,10 @@ LIBRARY_PAGE = 50
 #: spclient accepts large change batches, but a smaller one is cheaper to
 #: retry and gives better progress reporting on a long playlist.
 ADD_BATCH = 100
+
+#: One small spclient call per playlist, so a modest pool keeps a listing
+#: quick without hammering the endpoint we also write playlists through.
+COUNT_WORKERS = 6
 
 #: Spotify rejects a cover above 256 KB once base64-encoded.
 MAX_COVER_BYTES = 256 * 1024
@@ -78,7 +83,41 @@ class SpotifyProvider:
                 break
             offset += raw_count
 
-        return found[:limit]
+        listing = found[:limit]
+        self._fill_track_counts(listing)
+        return listing
+
+    def _fill_track_counts(self, playlists: list[Playlist]) -> None:
+        """Attach a track count to each playlist in a listing.
+
+        The library does not carry one. Checked live against a real account:
+        ``libraryV3`` returns no count, the batch entity decorator
+        (``fetchEntitiesForRecentlyPlayed``) returns the same fields and no
+        count either, and spclient has no multi-playlist metadata endpoint --
+        every plausible spelling 404s. Its rootlist does report a ``length``,
+        but that is how many playlists there are, not how many tracks.
+
+        What does exist is a per-playlist ``/metadata``, which answers with the
+        length and *not* the track list: ~1.6 KB against the ~130 KB the full
+        playlist body costs. So it is one of those each, in a small pool,
+        rather than one heavyweight read each.
+
+        A count is a nicety, so anything that goes wrong leaves it unknown --
+        the listing still prints, with a ``?``.
+        """
+
+        def fetch(playlist: Playlist) -> None:
+            try:
+                response = self._client.spclient(
+                    "GET", f"/playlist/v2/playlist/{playlist.id}/metadata"
+                )
+                if response.status_code < 400:
+                    playlist.track_count = response.json().get("length")
+            except Exception:
+                log.debug("No track count for %s", playlist.id, exc_info=True)
+
+        with ThreadPoolExecutor(max_workers=COUNT_WORKERS) as pool:
+            list(pool.map(fetch, playlists))
 
     def get_playlist(self, playlist_id: str) -> Playlist:
         data = self._client.query(
