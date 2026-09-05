@@ -5,14 +5,17 @@ Speaks the API the web player speaks, not the public Web API. See
 accounts since 2025, and a web-player token is throttled into uselessness
 there. The internal one works, on any account, today.
 
-Reads go through pathfinder GraphQL. Writes go through spclient, which is a
-different service with a different protocol -- so they are kept visibly apart
-below rather than pretending to be one API.
+Reads go through pathfinder GraphQL. Writes are split across both services in
+a way that is not guessable and had to be observed: creating a playlist and
+setting its attributes are spclient calls, while *adding tracks* is a
+pathfinder mutation. ``scripts/discover_spotify_writes.py`` is what recorded
+that, and is what to re-run if it ever changes.
 """
 
 from __future__ import annotations
 
 import base64
+import time
 
 from migratify.auth.spotify_web import SpotifyWebClient
 from migratify.config import get_logger
@@ -146,12 +149,59 @@ class SpotifyProvider:
         description: str | None = None,
         public: bool = False,
     ) -> str:
-        """Create a playlist through spclient.
+        """Create a playlist, exactly the way the web player does.
 
-        Two calls, because Spotify splits them: one creates the playlist and
-        returns its URI, a second attaches the name and description. The
-        second failing is not fatal -- an untitled playlist with the right
-        tracks is recoverable, a lost migration is not.
+        Three calls, because Spotify genuinely splits them:
+
+        1. ``POST /playlist/v2/playlist`` creates it and returns its URI.
+           A playlist created this way exists but is *not* in your library.
+        2. Adding it to the rootlist is what makes it appear there.
+        3. A separate change sets the description -- creation only accepts a
+           name.
+
+        Steps 2 and 3 are reported but not fatal. A playlist holding the right
+        tracks is recoverable by hand; losing a completed migration is not.
+        """
+        response = self._client.spclient(
+            "POST",
+            "/playlist/v2/playlist",
+            json={
+                "ops": [
+                    {
+                        "kind": "UPDATE_LIST_ATTRIBUTES",
+                        "updateListAttributes": {"newAttributes": {"values": {"name": name}}},
+                    }
+                ]
+            },
+        )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"Spotify refused to create the playlist ({response.status_code}): "
+                f"{response.text[:300]}"
+            )
+
+        playlist_id = shapes.id_from_uri((response.json() or {}).get("uri"))
+        if not playlist_id:
+            raise ProviderError("Spotify created a playlist but returned no URI for it.")
+
+        try:
+            self._add_to_library(playlist_id)
+        except ProviderError as exc:
+            log.warning("Playlist created but not added to your library: %s", exc)
+
+        if description:
+            try:
+                self._set_attributes(playlist_id, {"description": description[:300]})
+            except ProviderError as exc:
+                log.warning("Playlist created but the description was not set: %s", exc)
+
+        return playlist_id
+
+    def _add_to_library(self, playlist_id: str) -> None:
+        """Put a newly created playlist in the user's library.
+
+        Without this the playlist exists and is reachable by URL, but never
+        shows up in the sidebar -- which looks exactly like a failed migration.
         """
         response = self._client.spclient(
             "POST",
@@ -163,100 +213,70 @@ class SpotifyProvider:
                             {
                                 "kind": "ADD",
                                 "add": {
+                                    "items": [
+                                        {
+                                            "uri": f"spotify:playlist:{playlist_id}",
+                                            "attributes": {
+                                                "timestamp": str(int(time.time() * 1000))
+                                            },
+                                        }
+                                    ],
                                     "addFirst": True,
-                                    "items": [{"attributes": {"formatAttributes": []}}],
                                 },
                             }
-                        ]
+                        ],
+                        "info": {"source": {"client": "WEBPLAYER"}},
                     }
                 ]
             },
         )
         if response.status_code >= 400:
-            raise ProviderError(
-                f"Spotify refused to create the playlist ({response.status_code}): "
-                f"{response.text[:300]}"
-            )
+            raise ProviderError(f"{response.status_code}: {response.text[:200]}")
 
-        playlist_id = self._extract_created_id(response.json())
-        if not playlist_id:
-            raise ProviderError(
-                "Spotify created something but did not return a playlist ID."
-            )
-
-        try:
-            self._set_metadata(playlist_id, name, description, public)
-        except ProviderError as exc:
-            log.warning("Playlist created but naming it failed: %s", exc)
-
-        return playlist_id
-
-    @staticmethod
-    def _extract_created_id(payload: dict) -> str | None:
-        for key in ("uri", "playlistUri", "resultUri"):
-            candidate = shapes.id_from_uri(payload.get(key))
-            if candidate:
-                return candidate
-        # Some responses nest the new URI inside the applied delta.
-        for delta in payload.get("deltas") or []:
-            for op in delta.get("ops") or []:
-                candidate = shapes.id_from_uri(shapes.dig(op, "add", "items", 0, "uri"))
-                if candidate:
-                    return candidate
-        return None
-
-    def _set_metadata(
-        self, playlist_id: str, name: str, description: str | None, public: bool
-    ) -> None:
-        attributes: dict = {"name": name}
-        if description:
-            # Spotify truncates past 300 characters.
-            attributes["description"] = description[:300]
-
+    def _set_attributes(self, playlist_id: str, values: dict[str, str]) -> None:
         response = self._client.spclient(
             "POST",
             f"/playlist/v2/playlist/{playlist_id}/changes",
-            json={"deltas": [{"ops": [{"kind": "UPDATE_LIST_ATTRIBUTES",
-                                       "updateListAttributes": {"newAttributes":
-                                                                {"values": attributes}}}]}]},
+            json={
+                "deltas": [
+                    {
+                        "ops": [
+                            {
+                                "kind": "UPDATE_LIST_ATTRIBUTES",
+                                "updateListAttributes": {"newAttributes": {"values": values}},
+                            }
+                        ],
+                        "info": {"source": {"client": "WEBPLAYER"}},
+                    }
+                ]
+            },
         )
         if response.status_code >= 400:
-            raise ProviderError(
-                f"Could not set the playlist name ({response.status_code}): "
-                f"{response.text[:200]}"
-            )
+            raise ProviderError(f"{response.status_code}: {response.text[:200]}")
 
     def add_tracks(self, playlist_id: str, track_ids: list[str]) -> int:
+        """Append tracks via the pathfinder ``addToPlaylist`` mutation.
+
+        Adding goes through GraphQL rather than spclient -- the two services
+        split the work differently from how the read side does, which is why
+        this was worth observing rather than guessing.
+
+        ``BOTTOM_OF_PLAYLIST`` matters for correctness, not preference: the
+        player itself inserts at the top, which would reverse a batched
+        migration and silently scramble the playlist order.
+        """
         added = 0
 
         for start in range(0, len(track_ids), ADD_BATCH):
             batch = track_ids[start : start + ADD_BATCH]
-            response = self._client.spclient(
-                "POST",
-                f"/playlist/v2/playlist/{playlist_id}/changes",
-                json={
-                    "deltas": [
-                        {
-                            "ops": [
-                                {
-                                    "kind": "ADD",
-                                    "add": {
-                                        "addLast": True,
-                                        "items": [
-                                            {"uri": f"spotify:track:{tid}"} for tid in batch
-                                        ],
-                                    },
-                                }
-                            ]
-                        }
-                    ]
+            self._client.query(
+                "addToPlaylist",
+                {
+                    "playlistItemUris": [f"spotify:track:{tid}" for tid in batch],
+                    "playlistUri": f"spotify:playlist:{playlist_id}",
+                    "newPosition": {"moveType": "BOTTOM_OF_PLAYLIST", "fromUid": None},
                 },
             )
-            if response.status_code >= 400:
-                raise ProviderError(
-                    f"Spotify refused to add tracks ({response.status_code}): "
-                    f"{response.text[:300]}"
-                )
             added += len(batch)
 
         return added

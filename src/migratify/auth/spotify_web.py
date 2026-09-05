@@ -82,6 +82,32 @@ _DROP_HEADERS = {
 #: the captured headers lasts about an hour.
 _MAX_AGE_S = 45 * 60
 
+#: Mutation hashes, which cannot be learned the way read operations are.
+#:
+#: Reads are observable for free: loading a page makes the player issue them,
+#: so we watch and record. A mutation only happens when someone actually
+#: changes something, so passively browsing never reveals it -- and capturing
+#: one by performing it would mean writing to the user's account just to learn
+#: how to write to their account.
+#:
+#: So these are pinned, which is the one place this module hardcodes anything.
+#: They were recorded from a real session by ``scripts/discover_spotify_writes.py``,
+#: and when Spotify ships a client that changes them, re-running that script
+#: prints the new values. The error path below says so explicitly rather than
+#: leaving someone to guess.
+KNOWN_MUTATIONS: dict[str, str] = {
+    "addToPlaylist": "47b2a1234b17748d332dd0431534f22450e9ecbb3d5ddcdacbd83368636a0990",
+}
+
+#: Variable templates for those same operations, for the same reason.
+MUTATION_VARIABLES: dict[str, dict[str, Any]] = {
+    "addToPlaylist": {
+        "playlistItemUris": [],
+        "playlistUri": "",
+        "newPosition": {"moveType": "BOTTOM_OF_PLAYLIST", "fromUid": None},
+    },
+}
+
 
 @dataclass
 class WebSession:
@@ -237,6 +263,14 @@ def connect(prefer_installed: bool = True, prefer_browser: str | None = None) ->
     log.info("Spotify session stored.")
 
 
+def _pinned(operation: str) -> dict[str, Any] | None:
+    """The pinned spec for a mutation, if we have one."""
+    sha = KNOWN_MUTATIONS.get(operation)
+    if sha is None:
+        return None
+    return {"sha256": sha, "variables": copy.deepcopy(MUTATION_VARIABLES.get(operation, {}))}
+
+
 class SpotifyWebClient:
     """Replays the player's own operations with our variables."""
 
@@ -255,7 +289,7 @@ class SpotifyWebClient:
         makes this survive schema changes.
         """
         for attempt in range(2):
-            spec = self._session.operations.get(operation)
+            spec = self._session.operations.get(operation) or _pinned(operation)
             if spec is None:
                 if attempt == 0:
                     # An operation we have not seen yet -- the player may issue
@@ -298,8 +332,17 @@ class SpotifyWebClient:
             if body.get("errors"):
                 message = body["errors"][0].get("message", "unknown error")
                 if attempt == 0 and "persisted" in message.lower():
-                    # The hash no longer matches a known query: new client
-                    # release. Relearn and retry.
+                    if operation in KNOWN_MUTATIONS:
+                        # Recapturing cannot help: a mutation hash is pinned,
+                        # not observed. Say what will actually fix it.
+                        raise ProviderError(
+                            f"Spotify no longer recognizes the {operation!r} request. "
+                            "Its web player has changed.\n"
+                            "Refresh it by running: "
+                            "python scripts/discover_spotify_writes.py"
+                        )
+                    # A read operation: a new client release renamed or
+                    # rehashed it, so relearn and retry.
                     self._session = capture()
                     continue
                 raise ProviderError(f"Spotify {operation} returned an error: {message}")
@@ -322,6 +365,8 @@ class SpotifyWebClient:
             if k.lower() not in {"content-type", "accept"}
         }
         headers.setdefault("accept", "application/json")
+        if "json" in kwargs:
+            headers.setdefault("content-type", "application/json")
         headers |= kwargs.pop("headers", {})
 
         response = self._http.request(
