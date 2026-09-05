@@ -85,12 +85,14 @@ def catalog() -> list[Track]:
         # A trap: right title, wrong artist. Must never be chosen.
         make_track("Creep", "Vega Cover Band", id="y3", provider=Provider.YTMUSIC,
                    duration_ms=241_000),
-        # A genuine ambiguity: the album cut and the single, indistinguishable
-        # on every signal the scorer has. This is what review exists for.
+        # A genuine ambiguity: two different masters, three seconds apart, so
+        # close in score that the scorer cannot choose. This is what review
+        # exists for -- unlike a duplicate catalog listing, which is the same
+        # recording twice and is auto-accepted.
         make_track("Creep", "Radiohead", id="y4", provider=Provider.YTMUSIC,
                    album="Pablo Honey", duration_ms=238_000),
         make_track("Creep", "Radiohead", id="y5", provider=Provider.YTMUSIC,
-                   album="Pablo Honey", duration_ms=238_400),
+                   album="Pablo Honey", duration_ms=241_000),
     ]
 
 

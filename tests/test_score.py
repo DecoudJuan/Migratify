@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from factories import make_track
 from migratify.matching.normalize import normalize_track
-from migratify.matching.score import decide, rank, score_candidate
+from migratify.matching.score import decide, indistinguishable, rank, score_candidate
 from migratify.models import Decision, Provider, ResultKind
 
 MIN = 60_000
@@ -156,13 +156,19 @@ class TestDecisions:
         assert result.chosen_id == candidate.id
 
     def test_a_near_tie_goes_to_review_rather_than_a_coin_flip(self, thresholds) -> None:
-        """Two indistinguishable candidates means the scorer cannot tell them
-        apart. Taking the higher one would be a guess wearing a number."""
+        """Close scores on genuinely different cuts means the scorer cannot
+        tell them apart. Taking the higher one would be a guess wearing a
+        number.
+
+        Three seconds apart, so these are two different masters rather than
+        the same recording listed twice -- see TestDuplicateListings for the
+        case that is deliberately *not* a tie.
+        """
         source = make_track("Alive", "Pearl Jam", album="Ten", duration_ms=340_000)
         first = make_track("Alive", "Pearl Jam", id="a", album="Ten",
                            provider=Provider.YTMUSIC, duration_ms=340_000)
         second = make_track("Alive", "Pearl Jam", id="b", album="Ten",
-                            provider=Provider.YTMUSIC, duration_ms=340_500)
+                            provider=Provider.YTMUSIC, duration_ms=343_000)
 
         result = decide(source, rank(source, [(first, "song"), (second, "song")]), thresholds)
         assert result.decision is Decision.REVIEW
@@ -176,8 +182,71 @@ class TestDecisions:
         source = make_track("Alive", "Pearl Jam", duration_ms=340_000)
         candidates = [
             (make_track("Alive", "Pearl Jam", id=f"c{i}", provider=Provider.YTMUSIC,
-                        duration_ms=340_000 + i * 400), "song")
+                        duration_ms=340_000 + i * 3_000), "song")
             for i in range(8)
         ]
         result = decide(source, rank(source, candidates), thresholds)
         assert 0 < len(result.candidates) <= thresholds.max_candidates_shown
+
+
+class TestDuplicateListings:
+    """Catalogs list the same recording many times.
+
+    The album cut, the single, the greatest-hits entry and several regional
+    releases are the same audio and all surface in one search, scoring within a
+    point of each other. Treating that as a tie buries the genuinely ambiguous
+    cases in noise and trains the user to approve without looking.
+    """
+
+    def test_same_recording_listed_twice_is_auto_accepted(self, thresholds) -> None:
+        source = make_track("Hurt", "Johnny Cash", album="American IV", duration_ms=217_000)
+        album_cut = make_track("Hurt", "Johnny Cash", id="a", album="American IV",
+                               provider=Provider.YTMUSIC, duration_ms=217_000)
+        compilation = make_track("Hurt", "Johnny Cash", id="b", album="The Legend",
+                                 provider=Provider.YTMUSIC, duration_ms=217_400)
+
+        result = decide(source, rank(source, [(album_cut, "song"), (compilation, "song")]),
+                        thresholds)
+        assert result.decision is Decision.AUTO
+        assert result.chosen_id is not None
+
+    def test_a_different_length_is_still_a_tie(self, thresholds) -> None:
+        """Three seconds apart is a different cut, not a duplicate listing."""
+        source = make_track("Crazy", "Gnarls Barkley", duration_ms=178_000)
+        album = make_track("Crazy", "Gnarls Barkley", id="a",
+                           provider=Provider.YTMUSIC, duration_ms=178_000)
+        single = make_track("Crazy", "Gnarls Barkley", id="b",
+                            provider=Provider.YTMUSIC, duration_ms=181_000)
+
+        assert not indistinguishable(
+            *rank(source, [(album, "song"), (single, "song")])[:2]
+        )
+
+    def test_a_different_version_is_still_a_tie(self, thresholds) -> None:
+        source = make_track("Alive", "Pearl Jam", duration_ms=340_000)
+        studio = make_track("Alive", "Pearl Jam", id="a",
+                            provider=Provider.YTMUSIC, duration_ms=340_000)
+        live = make_track("Alive (Live)", "Pearl Jam", id="b",
+                          provider=Provider.YTMUSIC, duration_ms=340_500)
+
+        ranked = rank(source, [(studio, "song"), (live, "song")])
+        assert not indistinguishable(ranked[0], ranked[1])
+
+    def test_a_different_artist_is_still_a_tie(self, thresholds) -> None:
+        """The whole point is to collapse duplicates, never different artists."""
+        source = make_track("Hurt", "Johnny Cash", duration_ms=217_000)
+        cash = make_track("Hurt", "Johnny Cash", id="a",
+                          provider=Provider.YTMUSIC, duration_ms=217_000)
+        other = make_track("Hurt", "Nine Inch Nails", id="b",
+                           provider=Provider.YTMUSIC, duration_ms=217_000)
+
+        ranked = rank(source, [(cash, "song"), (other, "song")])
+        assert not indistinguishable(ranked[0], ranked[1])
+
+    def test_unknown_length_is_never_called_a_duplicate(self, thresholds) -> None:
+        source = make_track("Song", "Artist", duration_ms=200_000)
+        first = make_track("Song", "Artist", id="a", provider=Provider.YTMUSIC)
+        second = make_track("Song", "Artist", id="b", provider=Provider.YTMUSIC)
+
+        ranked = rank(source, [(first, "song"), (second, "song")])
+        assert not indistinguishable(ranked[0], ranked[1])

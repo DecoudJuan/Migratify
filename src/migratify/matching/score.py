@@ -219,6 +219,45 @@ def rank(
     return scored
 
 
+#: How close two durations must be to count as the same recording.
+SAME_RECORDING_MS = 2_000
+
+#: How similar two artist sets must be to count as the same credit.
+SAME_ARTIST = 0.95
+
+
+def indistinguishable(first: Candidate, second: Candidate) -> bool:
+    """True when two candidates are the same recording, listed twice.
+
+    Catalogs are full of duplicates: the album cut, the single, the greatest
+    hits entry and three regional releases are all the same audio, and they all
+    surface in one search. They score within a point of each other, which the
+    ambiguity rule reads as a tie -- but there is nothing to decide, because
+    every one of them is the right answer.
+
+    Sending those to review is worse than useless. It buries the genuinely
+    ambiguous cases in noise, and trains the user to approve without looking,
+    which is exactly the habit that lets a real mistake through.
+
+    So the bar is deliberately strict: same title, same artists, same length to
+    within two seconds, same version. Anything less and it stays a tie.
+    """
+    a, b = normalize_track(first.track), normalize_track(second.track)
+
+    if a.title != b.title:
+        return False
+    if a.significant_tags != b.significant_tags:
+        return False
+    if artist_similarity(a, b) < SAME_ARTIST:
+        return False
+
+    # Unknown length means we cannot claim they are the same recording.
+    if not a.duration_ms or not b.duration_ms:
+        return False
+
+    return abs(a.duration_ms - b.duration_ms) <= SAME_RECORDING_MS
+
+
 def decide(
     source_track: Track,
     candidates: list[Candidate],
@@ -245,6 +284,8 @@ def decide(
     ambiguous = (
         runner_up is not None
         and (best.score - runner_up.score) < thresholds.ambiguity_margin
+        # A near-tie between two listings of the same recording is not a tie.
+        and not indistinguishable(best, runner_up)
     )
 
     confident = (

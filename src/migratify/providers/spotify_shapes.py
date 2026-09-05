@@ -92,7 +92,15 @@ def parse_track(data: dict | None) -> Track | None:
         artists=artists,
         artist_ids=artist_ids,
         album=dig(data, "albumOfTrack", "name") or dig(data, "album", "name"),
-        duration_ms=dig(data, "trackDuration", "totalMilliseconds"),
+        # The same value under two names: playlist contents call it
+        # trackDuration, search results call it duration. Reading only one
+        # leaves every search candidate without a length, which silently
+        # disables the strongest matching signal there is -- a real bug that
+        # pushed 23 of 24 tracks into review before it was found.
+        duration_ms=(
+            dig(data, "trackDuration", "totalMilliseconds")
+            or dig(data, "duration", "totalMilliseconds")
+        ),
         # The internal API does not expose ISRCs. The public Web API did, and
         # losing it costs the exact-identity shortcut when Spotify is the
         # destination -- the weighted score carries those matches instead.
