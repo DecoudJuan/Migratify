@@ -47,6 +47,23 @@ is simply unavailable on a free account. Signing in does not touch that gate.
 The direction is read from the URL — a Spotify link migrates to YouTube Music,
 and a YouTube Music link migrates to Spotify.
 
+## Or just open it
+
+Double-clicking the executable no longer flashes a help screen and closes the
+window. Migratify with no arguments opens a prompt that stays:
+
+```
+ ▄▟███▙▄ ♪    Migratify v0.3.0
+ ███◉███  ♫   Spotify · YouTube Music · connected, either direction
+ ▀▜███▛▀ ♪    ~/.migratify · 3 runs
+
+migratify > plan https://open.spotify.com/playlist/...
+```
+
+Every command works there exactly as it does in a shell, minus the `migratify`
+prefix. The middle line is live — each service is green when it has a session
+and red when it does not. `help` lists everything, `exit` closes the window.
+
 ## Commands
 
 | Command | What it does | Writes? |
@@ -60,6 +77,7 @@ and a YouTube Music link migrates to Spotify.
 | `migrate <playlist>` | `plan` → `review` → `apply`, guided | yes |
 | `sync <playlist>` | Migrate again, adding only what is new | yes |
 | `report` / `runs` | Re-render a report, list past runs | no |
+| `shell` | The interactive prompt — a bare `migratify` opens it too | no |
 | `help` | All of the above, on one screen | no |
 
 `plan` is always read-only, and `review` and `apply` default to your most

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "migratify"
-version = "0.2.0"
+version = "0.3.0"
 description = "Migrate playlists between Spotify and YouTube Music with high-precision track matching."
 readme = "README.md"
 license = { file = "LICENSE" }
