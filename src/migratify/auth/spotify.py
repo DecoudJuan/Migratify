@@ -25,6 +25,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
@@ -67,9 +68,12 @@ def _pkce_pair() -> tuple[str, str]:
 class _CallbackHandler(BaseHTTPRequestHandler):
     """Single-shot handler that captures the authorization code."""
 
-    result: dict[str, str] = {}
+    #: Class-level on purpose: HTTPServer instantiates the handler per
+    #: request, so an instance attribute could not survive back to the
+    #: caller. The server is single-shot, so there is nothing to race with.
+    result: ClassVar[dict[str, str]] = {}
 
-    def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+    def do_GET(self) -> None:
         params = parse_qs(urlparse(self.path).query)
         _CallbackHandler.result = {k: v[0] for k, v in params.items()}
 

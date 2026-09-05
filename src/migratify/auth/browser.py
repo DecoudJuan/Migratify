@@ -23,9 +23,9 @@ rather than the other way round.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from migratify.auth.browsers import Browser, drivable_browsers, readable_browsers
 from migratify.config import get_logger, get_settings
@@ -90,7 +90,7 @@ def _read_one(browser: Browser, domain: str) -> CookieJar | None:
     for backend_name, reader in _backends():
         try:
             cookies = reader(browser, domain)
-        except Exception as exc:  # noqa: BLE001 - every backend fails differently
+        except Exception as exc:
             log.debug("%s could not read %s cookies for %s: %s", backend_name, browser.key, domain, exc)
             continue
         if cookies:
@@ -232,7 +232,7 @@ def login_window(
                 if c["domain"].endswith(domain.lstrip("."))
             }
             jar = CookieJar(cookies, source="Migratify login window")
-        except Exception as exc:  # noqa: BLE001 - surface as an auth failure
+        except Exception as exc:
             raise AuthError(
                 f"Did not detect a completed {service_label} sign-in.\n"
                 "If you did sign in, run the command again -- the window closed too early."

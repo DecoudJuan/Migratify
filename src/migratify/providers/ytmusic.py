@@ -139,7 +139,7 @@ class YouTubeMusicProvider:
     def _fetch(self, playlist_id: str, limit: int | None = None) -> dict:
         try:
             return self._client.get_playlist(playlist_id, limit=limit)
-        except Exception as exc:  # noqa: BLE001 - ytmusicapi raises broadly
+        except Exception as exc:
             raise ProviderError(
                 f"Could not read YouTube Music playlist {playlist_id}: {exc}"
             ) from exc
@@ -217,7 +217,7 @@ class YouTubeMusicProvider:
                 limit=limit,
                 ignore_spelling=True,
             )
-        except Exception as exc:  # noqa: BLE001 - ytmusicapi raises broadly
+        except Exception as exc:
             log.debug("YouTube Music search failed for %r: %s", query.text, exc)
             return []
 
@@ -258,7 +258,7 @@ class YouTubeMusicProvider:
                     # playlist legitimately contain the same song twice.
                     duplicates=True,
                 )
-            except Exception as exc:  # noqa: BLE001 - ytmusicapi raises broadly
+            except Exception as exc:
                 raise ProviderError(
                     f"Failed adding {len(batch)} tracks to YouTube Music: {exc}"
                 ) from exc

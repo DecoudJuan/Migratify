@@ -35,7 +35,7 @@ class SearchQuery:
     rest, which is how the ISRC path avoids several wasted round trips.
     """
 
-    __slots__ = ("text", "label", "result_filter", "decisive")
+    __slots__ = ("decisive", "label", "result_filter", "text")
 
     def __init__(
         self,

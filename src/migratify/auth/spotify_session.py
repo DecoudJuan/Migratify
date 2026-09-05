@@ -72,7 +72,7 @@ def _capture_token() -> dict[str, Any]:
             return
         try:
             payload = response.json()
-        except Exception:  # noqa: BLE001 - non-JSON responses are not ours
+        except Exception:
             return
         if payload.get("accessToken"):
             captured.update(payload)

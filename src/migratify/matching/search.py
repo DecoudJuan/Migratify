@@ -66,7 +66,7 @@ class Matcher:
         for query in self.target.build_queries(track):
             try:
                 results = self.target.search(query, limit=RESULTS_PER_QUERY)
-            except Exception as exc:  # noqa: BLE001 - never let one query sink a track
+            except Exception as exc:
                 log.debug("Query %s failed for %r: %s", query.label, track.display, exc)
                 continue
 
@@ -97,9 +97,10 @@ class Matcher:
             return False
         # A close runner-up means this would go to review anyway, and another
         # query might yet break the tie.
-        if len(ranked) > 1 and (best.score - ranked[1].score) < self.thresholds.ambiguity_margin:
-            return False
-        return True
+        return not (
+            len(ranked) > 1
+            and (best.score - ranked[1].score) < self.thresholds.ambiguity_margin
+        )
 
     def match(self, track: Track) -> MatchResult:
         """Resolve one track to a decision."""
