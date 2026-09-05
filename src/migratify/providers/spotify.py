@@ -191,7 +191,11 @@ class SpotifyProvider:
 
         if description:
             try:
-                self._set_attributes(playlist_id, {"description": description[:300]})
+                # Name goes with it: a description-only update is rejected with
+                # a bare 400, and the player never sends one on its own.
+                self._set_attributes(
+                    playlist_id, {"name": name, "description": description[:300]}
+                )
             except ProviderError as exc:
                 log.warning("Playlist created but the description was not set: %s", exc)
 
@@ -282,6 +286,18 @@ class SpotifyProvider:
         return added
 
     def set_cover(self, playlist_id: str, jpeg_bytes: bytes) -> bool:
+        """Upload playlist artwork.
+
+        Unlike the rest of the write path, this endpoint has not been observed
+        from a real session yet -- the discovery run covered creating, naming
+        and adding, not setting an image -- so the address here is an educated
+        guess and currently answers 404.
+
+        It fails loudly in the log and returns False rather than raising, so a
+        cover never costs an otherwise completed migration. To fix it properly,
+        re-run scripts/discover_spotify_writes.py and change a playlist image
+        while it watches.
+        """
         encoded = base64.b64encode(jpeg_bytes)
         if len(encoded) > MAX_COVER_BYTES:
             raise ProviderError(
@@ -296,7 +312,10 @@ class SpotifyProvider:
         )
         if response.status_code >= 400:
             log.warning(
-                "Cover upload refused (%s): %s", response.status_code, response.text[:200]
+                "Spotify refused the cover upload (%s). The endpoint is not yet "
+                "confirmed; re-run scripts/discover_spotify_writes.py and change a "
+                "playlist image while it watches.",
+                response.status_code,
             )
             return False
         return True

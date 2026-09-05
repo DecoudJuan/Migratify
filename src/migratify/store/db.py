@@ -175,9 +175,9 @@ class Store:
                 run.auto,
                 run.review,
                 run.miss,
+                run.id,
             ),
         )
-        self._db.execute("UPDATE runs SET id = id WHERE id = ?", (run.id,))
         self._db.commit()
 
     def refresh_counters(self, run_id: str) -> dict[str, int]:

@@ -48,11 +48,12 @@ SKIP_SUBSTRINGS = (
 INSTRUCTIONS = """
 A browser window is open on your Spotify library.
 
-Please do these three things in it, slowly:
+Please do these four things in it, slowly:
 
   1. Create a new playlist.
   2. Rename it to something, and give it a description.
   3. Search for any song and add it to that playlist.
+  4. Change the playlist's image (click the cover, then Choose photo).
 
 Then close the browser window.
 

@@ -15,7 +15,7 @@ import pytest
 from factories import make_track
 from migratify.config import Thresholds
 from migratify.matching.search import Matcher, accepted_ids, pending_review
-from migratify.models import Decision, Provider, Run, Track
+from migratify.models import Decision, Provider, Run, RunStatus, Track
 from migratify.providers.base import SearchQuery
 from migratify.report import to_csv, to_json, to_markdown
 from migratify.store import Store
@@ -279,3 +279,28 @@ def test_pending_review_excludes_resolved(catalog, sources) -> None:
         if result.decision is Decision.REVIEW:
             result.chosen_id = result.candidates[0].track.id
     assert pending_review(results) == []
+
+
+class TestRunUpdates:
+    """update_run only ever runs during apply, which is why a broken binding
+    survived every earlier test and surfaced against a real account."""
+
+    def test_target_playlist_and_status_persist(self, store) -> None:
+        run = store.create_run(_run())
+        run.target_playlist_id = "PL_created"
+        run.status = RunStatus.APPLIED
+        store.update_run(run)
+
+        reloaded = store.get_run(run.id)
+        assert reloaded.target_playlist_id == "PL_created"
+        assert reloaded.status is RunStatus.APPLIED
+
+    def test_updating_one_run_leaves_others_alone(self, store) -> None:
+        """The missing id binding would have made this update every row."""
+        first = store.create_run(_run())
+        second = store.create_run(_run())
+
+        first.target_playlist_id = "PL_first"
+        store.update_run(first)
+
+        assert store.get_run(second.id).target_playlist_id is None
