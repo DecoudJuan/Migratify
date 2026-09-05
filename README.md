@@ -153,6 +153,29 @@ migratify migrate https://open.spotify.com/playlist/...
 migratify migrate https://music.youtube.com/playlist?list=...
 ```
 
+### The interactive prompt
+
+`migratify` on its own — or a double-clicked executable, which is the same
+thing — opens a prompt instead of printing help and closing the window:
+
+```
+ ▄▟███▙▄ ♪    Migratify v0.2.0
+ ███◉███  ♫   Spotify · YouTube Music · connected, either direction
+ ▀▜███▛▀ ♪    ~/.migratify · 3 runs
+
+migratify > plan https://open.spotify.com/playlist/...
+```
+
+The middle line is live: each service is green when it has a session and red
+when it does not, and it lists whatever services exist rather than naming two.
+
+Every command works there exactly as it does in a shell, minus the
+`migratify` prefix. `help` lists them, `exit` closes the window, and the
+safety rules are unchanged — `plan` reports, `apply` writes, an unsure match
+waits in `review`. Piped or redirected, where there is no one to type, it
+prints help and exits as before. `migratify shell` opens the same prompt on
+purpose.
+
 ### Liked Songs
 
 Your saved library migrates like anything else. It is not a playlist on either
@@ -205,7 +228,7 @@ one; `migratify runs` lists them.
 
 | Command | Writes to a music service? |
 |---|:---:|
-| `login`, `auth`, `playlists`, `runs`, `report` | no |
+| `login`, `auth`, `playlists`, `runs`, `report`, `shell` | no |
 | `plan` | **no** — matches everything and writes a report |
 | `review` | no — records your decisions locally |
 | `apply` | **yes** — the only one |
@@ -285,7 +308,8 @@ Two things about that build are deliberate:
 
 The build script runs the binary and fails if it cannot start. That check is
 the point — a bundle missing a data file builds perfectly and only breaks on
-first run.
+first run. It also runs the binary with no arguments and no terminal, because
+that path now opens an interactive prompt and must not sit there waiting.
 
 ---
 

@@ -177,6 +177,21 @@ checking proves nothing. Verified on Windows: `auth status` reported both
 services working against live APIs, and a run against a throwaway
 `MIGRATIFY_HOME` drove a real browser through the bundled Playwright.
 
+### The interactive prompt
+
+| | Item | Commit |
+|---|---|---|
+| ✅ | A bare `migratify` opens a prompt instead of printing help and exiting | `feat(cli): open a prompt when Migratify is opened, not typed` |
+| ✅ | Banner: a vinyl pet, the version, which services are connected, how many runs are stored | same |
+| ✅ | ASCII fallback for consoles that cannot encode the block characters | same |
+
+A packaged binary gets double-clicked, and `no_args_is_help` makes that look
+broken: the window closes before the help can be read. The prompt is the same
+Typer app dispatched line by line, so nothing about `plan` being read-only or
+`apply` being the only writer depends on where the words came from. It only
+opens on a terminal — piped or redirected, help is still the right answer, and
+`scripts/build_exe.py` now checks that path so a hang can never ship.
+
 ---
 
 ## Beyond v0.1 💭

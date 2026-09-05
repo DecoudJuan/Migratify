@@ -48,6 +48,7 @@ of an unrelated change.
 Running the tool itself:
 
 ```bash
+migratify                      # no arguments: the interactive prompt
 migratify login                # connect both services
 migratify auth status          # what is connected, which browsers were found
 migratify plan <playlist-url>  # read-only, always safe while iterating
@@ -91,6 +92,7 @@ src/migratify/
     score.py         weighted scoring, vetoes, decision thresholds
     search.py        query orchestration -- the only matching/ module that
                      touches a provider, and only via the protocol
+  shell.py           the interactive prompt, and its banner
   artwork.py         cover download, JPEG reencode, Spotify upload
   store/db.py        SQLite: runs, run_tracks, match_cache
   report.py          markdown / csv / json reports
