@@ -339,15 +339,20 @@ def installed_browsers() -> list[Browser]:
 def readable_browsers() -> list[Browser]:
     """Browsers whose cookie store we can plausibly read on this platform.
 
-    On Windows, Chrome and Edge are excluded: App-Bound Encryption from v127
-    makes their cookie store unreadable to anything but themselves. Listing
-    them would only produce a confusing failure.
+    On Windows the **entire Chromium family** is excluded. App-Bound
+    Encryption arrived in Chromium v127 and every downstream browser inherits
+    it -- Brave, Comet, Vivaldi, Opera and Arc are as unreadable as Chrome and
+    Edge, which was verified by trying. An earlier version of this function
+    excluded only Chrome and Edge by name, and the result was advice telling
+    users to sign in to Brave, where the import could never work.
+
+    Firefox-family browsers remain readable everywhere.
     """
     result = []
     for browser in installed_browsers():
         if browser.profile_root() is None:
             continue
-        if _os_key() == "win32" and browser.key in {"chrome", "edge"}:
+        if _os_key() == "win32" and browser.family == "chromium":
             continue
         result.append(browser)
     return result

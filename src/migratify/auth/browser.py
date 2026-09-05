@@ -4,25 +4,32 @@ Connecting an account should mean *logging in*, the same way you log in
 anywhere else. No developer dashboard, no client ID, no API key, no pasting
 request headers out of devtools.
 
-Two strategies, tried in order:
+Three strategies, because no single one works everywhere:
 
-1. **Import from a browser you already use.** Instant and click-free. We walk
-   every browser in :mod:`migratify.auth.browsers` that is installed and
-   readable on this platform, newest session wins.
+1. **Import from a browser you already use.** Instant and click-free, and the
+   best outcome when it is available. On macOS and Linux it usually is. On
+   Windows it is not: App-Bound Encryption (Chromium v127+) makes every
+   Chromium profile unreadable from outside the browser that owns it, and
+   that includes Brave, Comet, Vivaldi and Arc, not just Chrome and Edge.
 
-2. **A login window in your own browser.** We drive whichever Chromium-family
-   browser you already have -- Chrome, Edge, Brave, Comet, Vivaldi, Opera,
-   Arc -- against a persistent profile under ``~/.migratify/browser-profile``.
-   You sign in normally. The session lives in that profile and survives
-   restarts, so every later refresh runs headless and invisible. Only if no
-   such browser exists do we fall back to a Playwright-managed Chromium.
+2. **A driven login window.** Playwright opens a browser you already have,
+   against a persistent profile in ``~/.migratify``. Fine for Spotify.
 
-Strategy 2 is the one that always works, which is why it is the fallback
-rather than the other way round.
+3. **A manual sign-in in an ordinary window** (:func:`manual_profile_login`).
+   Google refuses to authenticate inside an automation-controlled browser, so
+   strategy 2 cannot work for YouTube Music at all. Here the browser is
+   launched as a plain process -- no automation, nothing to detect -- pointed
+   at a profile directory we own. The user signs in normally; we reattach
+   afterwards to read the session, which is also how we get around App-Bound
+   Encryption, since the browser does its own decrypting.
+
+Whichever route is taken, the session lands in a persistent profile, so every
+later refresh runs headless and invisible.
 """
 
 from __future__ import annotations
 
+import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -161,6 +168,14 @@ def _require_playwright():
             "  migratify auth ytmusic --paste"
         ) from exc
     return sync_playwright
+
+
+def _pick_drivable(prefer: str | None = None) -> Browser | None:
+    """The browser we would drive, honouring an explicit preference."""
+    candidates = drivable_browsers()
+    if prefer:
+        candidates = [b for b in candidates if b.key == prefer] or candidates
+    return candidates[0] if candidates else None
 
 
 def _launch_kwargs(prefer: str | None = None) -> dict:
@@ -330,10 +345,81 @@ def login_window(
     return CookieJar(cookies, source="Migratify login window")
 
 
+def manual_profile_login(
+    url: str,
+    domain: str,
+    session_cookie: str,
+    service_label: str,
+    *,
+    prefer_browser: str | None = None,
+) -> CookieJar:
+    """Sign in through an ordinary browser window, then reuse that profile.
+
+    Google refuses sign-ins inside an automation-controlled browser, which
+    kills the driven login window for YouTube Music. Rather than try to look
+    like something we are not, this launches the browser the way a person
+    would -- a plain process, no automation flags, no debugging port -- and
+    simply points it at a profile directory we own.
+
+    The user signs in normally, in a normal browser. We only reconnect to that
+    profile afterwards, which is the same thing importing cookies from an
+    installed browser does. On Windows it is also the *only* way in, since
+    App-Bound Encryption makes every Chromium profile unreadable from outside
+    the browser that owns it -- reattaching lets the browser do the decrypting.
+    """
+    browser = _pick_drivable(prefer_browser)
+    executable = browser.executable() if browser else None
+    if executable is None:
+        raise AuthError(
+            f"No browser available to sign in to {service_label}.\n"
+            "Install Chrome, Edge, Brave or another Chromium browser, or use:\n"
+            "  migratify auth ytmusic --paste"
+        )
+
+    profile = profile_dir()
+    log.info("Opening %s so you can sign in to %s.", browser.label, service_label)
+    log.info("Sign in as usual, then CLOSE the browser window to continue.")
+
+    process = subprocess.Popen(
+        [
+            str(executable),
+            f"--user-data-dir={profile}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            url,
+        ]
+    )
+    try:
+        process.wait(timeout=_LOGIN_TIMEOUT_MS / 1000)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        raise AuthError(
+            f"Timed out waiting for the {service_label} sign-in.\n"
+            "Run the command again, sign in, then close the browser window."
+        ) from None
+
+    # The profile is free now, so we can read it the way the browser itself
+    # would -- by opening it.
+    log.info("Reading the session from that profile...")
+    cookies = headless_visit(url, settle_ms=4000, domain=domain)
+    bare = domain.lstrip(".")
+
+    jar = CookieJar(cookies, source=f"{browser.label} profile")
+    if not jar.has(session_cookie):
+        raise AuthError(
+            f"No {service_label} session was found in that profile.\n"
+            f"Make sure you completed the sign-in at {bare} before closing the window."
+        )
+
+    log.info("%s connected.", service_label)
+    return jar
+
+
 def headless_visit(
     url: str,
     on_response: Callable | None = None,
     settle_ms: int = 6000,
+    domain: str | None = None,
 ) -> dict[str, str]:
     """Load a URL headlessly in the saved profile and return its cookies.
 
@@ -356,6 +442,8 @@ def headless_visit(
                 page.on("response", on_response)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_timeout(settle_ms)
+            if domain is not None:
+                return _session_cookies(context, domain)
             return {c["name"]: c["value"] for c in context.cookies()}
         finally:
             context.close()
@@ -370,11 +458,22 @@ def acquire(
     prefer_installed: bool = True,
     prefer_browser: str | None = None,
 ) -> CookieJar:
-    """Get a live session for one service, the least intrusive way available."""
+    """Get a live session for one service, the least intrusive way available.
+
+    Google domains skip the driven login window entirely. It cannot succeed
+    there -- Google rejects sign-ins from automation-controlled browsers -- so
+    opening one would only waste the user's time before failing.
+    """
     if prefer_installed:
         jar = read_installed_browsers(domain, session_cookie)
         if jar is not None:
             return jar
+
+    if domain == YTM_DOMAIN:
+        return manual_profile_login(
+            login_url, domain, session_cookie, service_label,
+            prefer_browser=prefer_browser,
+        )
 
     return login_window(
         login_url,
