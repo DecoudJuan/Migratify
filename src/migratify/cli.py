@@ -16,6 +16,7 @@ Commands:
     migrate     the three above, guided
     report      re-render a finished run
     runs        what you have done before
+    help        all of the above, on one screen
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import uuid
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
@@ -653,6 +655,58 @@ def runs(limit: int = typer.Option(20, "--limit")) -> None:
             run.status.value,
         )
     console.print(table)
+
+
+# --- help -------------------------------------------------------------------
+
+_COMMANDS: list[tuple[str, str, str]] = [
+    ("login", "[service] [--browser B] [--fresh]", "Connect Spotify and YouTube Music."),
+    ("auth status", "[--no-verify]", "What is connected, and which browsers can be read."),
+    ("auth ytmusic", "[--paste | --oauth]", "Fallback YouTube Music sign-in."),
+    ("playlists", "<service>", "List your playlists on a service."),
+    ("plan", "<playlist> [--to S] [--from S]", "Match every track and write a report. Never writes."),
+    ("review", "[run-id]", "Resolve the ambiguous matches yourself."),
+    ("apply", "[run-id] [--name N] [--public]", "Create the playlist and write the accepted tracks."),
+    ("migrate", "<playlist> [--to S]", "plan -> review -> apply, guided."),
+    ("report", "[run-id] [--format md|csv|json]", "Re-render a finished run."),
+    ("runs", "[--limit N]", "Past runs, with their IDs."),
+    ("help", "", "This overview."),
+]
+
+
+@app.command("help")
+def help_cmd() -> None:
+    """Everything Migratify can do, in one screen."""
+    console.print(
+        Panel(
+            "Migratify moves a playlist between Spotify and YouTube Music in either\n"
+            "direction, carrying the tracks, the name, the description and the cover.\n\n"
+            "[bold]plan[/bold] is always read-only. [bold]apply[/bold] is the only command that writes\n"
+            "to a music service, and it only writes tracks that were accepted or that\n"
+            "you resolved in [bold]review[/bold] -- an unsure match is never guessed.",
+            title="migratify",
+            border_style="cyan",
+        )
+    )
+
+    table = Table(title="Commands", title_justify="left")
+    table.add_column("Command", style="bold cyan", no_wrap=True)
+    table.add_column("Arguments", style="dim", no_wrap=True)
+    table.add_column("What it does")
+    for name, args, description in _COMMANDS:
+        # Rich would read '[run-id]' as markup and swallow it.
+        table.add_row(name, escape(args), description)
+    console.print(table)
+
+    console.print("\n[bold]The usual flow[/bold]")
+    console.print("  1. migratify login")
+    console.print("  2. migratify plan <playlist-url>      [dim]read-only, safe to repeat[/dim]")
+    console.print("  3. migratify review                   [dim]decide the ambiguous ones[/dim]")
+    console.print("  4. migratify apply                    [dim]this is the one that writes[/dim]")
+    console.print(
+        "\n[dim]The direction is read from the playlist URL; --to and --from override it."
+        "\nAny command takes --help for its own options.[/dim]"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
