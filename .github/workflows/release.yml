@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  binary:
+    name: ${{ matrix.os }} binary
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # PyInstaller cannot cross-compile: each platform's binary has to be
+        # built on that platform.
+        include:
+          - os: windows-latest
+            asset: migratify-windows
+          - os: macos-latest
+            asset: migratify-macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Pinned rather than matrixed: a release is one build per platform,
+          # and the frozen bundle carries this interpreter with it.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        # The login extra is not optional here. Signing in *is* the browser
+        # automation, and a build without it can only reach the fallback auth
+        # flows -- which need a registered Spotify app that free accounts
+        # cannot use.
+        run: pip install -e ".[login,package]"
+
+      - name: Build
+        # This also runs the binary and fails if it cannot start, which is the
+        # only way a missing data file or dynamic import gets caught: the
+        # bundle builds cleanly either way.
+        run: python scripts/build_exe.py
+
+      - name: Package
+        shell: bash
+        # A zip on both, so the download is one file and the instructions are
+        # the same sentence on either platform.
+        run: |
+          cd dist
+          7z a "../${{ matrix.asset }}.zip" migratify 2>/dev/null \
+            || zip -qr "../${{ matrix.asset }}.zip" migratify
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: binary
+    runs-on: ubuntu-latest
+    # A tag is a release; a manual run is a build check and publishes nothing.
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Migratify ${GITHUB_REF_NAME}" \
+            --notes-file packaging/release-notes.md \
+            artifacts/*.zip
