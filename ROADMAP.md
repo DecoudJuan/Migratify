@@ -78,15 +78,37 @@ The core of the project. Pure, offline-testable, direction-agnostic.
 | ✅ | `migratify-review` — resolve ambiguous matches by reasoning over discography and context, where fuzzy scoring cannot break a tie |
 | ✅ | `migratify-tune` — analyze a run's misses, propose threshold and normalization changes |
 
-## Phase 8 — Quality 🔨  (awaiting the first real run)
+## Phase 8 — Quality ✅
 
 | | Item |
 |---|---|
 | ✅ | GitHub Actions: ruff + pytest on Linux, macOS and Windows |
 | ✅ | 60 offline tests — golden set plus an end-to-end pipeline over a fake provider |
 | ✅ | `/init` pass to validate `CLAUDE.md` against the finished tree |
-| 🔨 | First real end-to-end run, both directions, on a small playlist — blocked on `migratify login spotify`, which needs an interactive sign-in |
-| ⬜ | Threshold calibration from that run |
+| ✅ | First real end-to-end run, both directions, on the hostile test bench |
+| ✅ | Threshold calibration from that run — no threshold changed; two real bugs found instead |
+
+### What the first real run measured
+
+A deliberately hostile 24-track playlist (`scripts/seed_test_playlist.py`),
+free Spotify account, both directions:
+
+| Direction | Auto | Review | Not found |
+|---|---:|---:|---:|
+| Spotify → YouTube Music | 21 | 3 | 0 |
+| YouTube Music → Spotify | 22 | 2 | 0 |
+
+Both sit inside the 85–95% healthy band, and every review case was genuinely
+ambiguous — competing masters within a couple of seconds, not confusion
+between different songs.
+
+The traps behaved: `Hurt — Johnny Cash` resolved to Johnny Cash and not to the
+real catalog artist *The Ghost of Johnny Cash*; radio edits matched radio
+edits; remasters still matched their originals.
+
+Getting there took two bug fixes rather than any tuning — Spotify names track
+duration differently in search than in playlists, and the ambiguity rule was
+treating duplicate catalog listings of one recording as a tie.
 
 ---
 
@@ -101,6 +123,7 @@ Not committed to, recorded so the reasoning is not lost.
 | 💭 | More providers: Tidal, Apple Music, Deezer | The point of `MusicProvider`. Should need zero changes to `matching/` |
 | 💭 | `--strict` profile that reviews everything below 95 | For libraries where a wrong track is worse than a missing one |
 | 💭 | Packaged `.exe` via PyInstaller | Only worth it if the CLI proves itself first |
+| ⬜ | Spotify cover upload | The one write endpoint never observed from a real session; currently 404s. Re-run `scripts/discover_spotify_writes.py` and change a playlist image while it watches |
 
 ---
 
@@ -116,6 +139,12 @@ These are properties of the platforms, not bugs to be fixed.
   Encryption from v127 makes their cookie store unreadable to any other
   process. The login window exists for exactly this case.
 - **Safari import needs Full Disk Access** for the terminal, on macOS.
+- **Google blocks sign-in inside automated browsers.** Deliberate account
+  protection, not a bug to defeat. Migratify launches an ordinary browser
+  process instead and reattaches to the profile afterwards.
+- **On Windows, no Chromium browser's cookies can be imported.** App-Bound
+  Encryption from v127 covers the whole family — Brave, Comet, Vivaldi and Arc
+  included, not just Chrome and Edge. Firefox still works.
 - **The sign-in paths use non-public endpoints.** They are the ones that ask
   nothing of the user, and they will break someday. The official flows stay
   in the tree as fallbacks for that day.
