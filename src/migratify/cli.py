@@ -20,6 +20,8 @@ Commands:
 
 from __future__ import annotations
 
+import contextlib
+import sys
 import uuid
 
 import typer
@@ -31,7 +33,7 @@ from rich.table import Table
 
 from migratify import artwork
 from migratify import report as reporting
-from migratify.auth import browsers, spotify_session
+from migratify.auth import browsers, spotify_web
 from migratify.auth import ytmusic as ytm_auth
 from migratify.config import get_settings, setup_logging
 from migratify.matching.search import Matcher, accepted_ids, pending_review
@@ -40,6 +42,23 @@ from migratify.providers.base import ProviderError
 from migratify.providers.registry import get_provider, parse_ref, resolve_direction
 from migratify.store import Store
 
+
+def _force_utf8_output() -> None:
+    """Make stdout able to carry the characters music metadata actually uses.
+
+    Windows still defaults to a legacy code page (cp1252 here), and writing a
+    playlist name containing anything outside it raises UnicodeEncodeError
+    mid-render. Track and artist names are full of such characters, so this is
+    a normal case rather than an edge one.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(OSError, ValueError):
+                reconfigure(encoding="utf-8", errors="replace")
+
+
+_force_utf8_output()
 console = Console()
 
 app = typer.Typer(
@@ -132,7 +151,7 @@ def login(
     for name in targets:
         try:
             if name == "spotify":
-                spotify_session.connect(prefer_installed=not fresh, prefer_browser=browser)
+                spotify_web.connect(prefer_installed=not fresh, prefer_browser=browser)
             elif name == "ytmusic":
                 ytm_auth.connect(prefer_installed=not fresh, prefer_browser=browser)
             else:
@@ -152,11 +171,7 @@ def _stored_method(provider: Provider) -> str | None:
     Says nothing about whether they *work* -- see `_verify`.
     """
     if provider is Provider.SPOTIFY:
-        if spotify_session.is_connected():
-            return "browser session"
-        from migratify.auth import spotify as pkce
-
-        return "OAuth PKCE" if pkce.load_token() is not None else None
+        return "signed-in session" if spotify_web.is_connected() else None
 
     return ytm_auth.describe() if ytm_auth.is_connected() else None
 
@@ -232,24 +247,6 @@ def auth_status(
 
     with Store() as store:
         console.print(f"[dim]Cached matches: {store.cache_size()} · {settings.db_file}[/dim]")
-
-
-@auth_app.command("spotify")
-def auth_spotify(
-    pkce: bool = typer.Option(False, "--pkce", help="Use the registered-app OAuth flow."),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-) -> None:
-    """Fallback Spotify auth. Prefer: migratify login spotify"""
-    setup_logging(verbose)
-    if not pkce:
-        console.print("[dim]Tip: 'migratify login spotify' needs no registered app.[/dim]\n")
-    try:
-        from migratify.auth import spotify as pkce_auth
-
-        pkce_auth.authorize()
-    except ProviderError as exc:
-        _fail(str(exc))
-    console.print("[green]Spotify connected.[/green]")
 
 
 @auth_app.command("ytmusic")

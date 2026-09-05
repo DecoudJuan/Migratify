@@ -1,95 +1,37 @@
 """Spotify as both a source and a destination.
 
-A thin, deliberate client over the Web API rather than a wrapper library: we
-use a handful of endpoints, we need exact control over pagination and retry,
-and the bearer token can come from either of two very different auth paths.
+Speaks the API the web player speaks, not the public Web API. See
+:mod:`migratify.auth.spotify_web` for why: the public API is closed to free
+accounts since 2025, and a web-player token is throttled into uselessness
+there. The internal one works, on any account, today.
 
-Rate limiting is handled by honouring ``Retry-After`` on 429 rather than by
-guessing at a delay. Spotify tells us how long to wait; anything we invent is
-either too slow or still too fast.
+Reads go through pathfinder GraphQL. Writes go through spclient, which is a
+different service with a different protocol -- so they are kept visibly apart
+below rather than pretending to be one API.
 """
 
 from __future__ import annotations
 
 import base64
-import time
 
-import httpx
-
-from migratify.auth import spotify_session
+from migratify.auth.spotify_web import SpotifyWebClient
 from migratify.config import get_logger
-from migratify.models import Playlist, Provider, ResultKind, Track
-from migratify.providers.base import AuthError, ProviderError, SearchQuery
+from migratify.models import Playlist, Provider, Track
+from migratify.providers import spotify_shapes as shapes
+from migratify.providers.base import ProviderError, SearchQuery
 
 log = get_logger(__name__)
 
-API = "https://api.spotify.com/v1"
-
-#: Hard API limits, not preferences.
+#: Pathfinder paginates; these are what the player itself uses.
 TRACKS_PAGE = 100
+LIBRARY_PAGE = 50
+
+#: spclient accepts large change batches, but a smaller one is cheaper to
+#: retry and gives better progress reporting on a long playlist.
 ADD_BATCH = 100
-PLAYLISTS_PAGE = 50
 
-#: Spotify rejects a cover above 256 KB *after* base64 encoding.
+#: Spotify rejects a cover above 256 KB once base64-encoded.
 MAX_COVER_BYTES = 256 * 1024
-
-
-def _spotify_message(response: httpx.Response) -> str:
-    """Spotify's own explanation, when it sent one.
-
-    Most errors arrive as ``{"error": {"message": ...}}``, but not all: the
-    Premium gate replies with a bare plain-text sentence and no JSON at all.
-    That is the single most important 403 to explain well, so falling back to
-    the raw body is not defensive padding -- without it the one message the
-    user most needs is the one we would drop.
-    """
-    try:
-        payload = response.json()
-    except Exception:
-        return response.text.strip()[:400]
-
-    if isinstance(payload, dict):
-        error = payload.get("error")
-        if isinstance(error, dict):
-            return str(error.get("message") or "")
-        if isinstance(error, str):
-            return error
-    return response.text.strip()[:400]
-
-
-def _explain_403(response: httpx.Response) -> str:
-    """Turn a 403 into something the user can act on.
-
-    Spotify returns 403 for two very different situations, and guessing wrong
-    sends the user down the wrong path entirely:
-
-    * The **app owner has no Premium subscription**. Since 2025 this blocks
-      *every* Web API call from a registered app, even with all scopes
-      granted, and no amount of re-authenticating will fix it. Only the
-      sign-in path avoids it.
-    * A genuinely missing permission on the session.
-
-    So we lead with Spotify's own message rather than inventing a diagnosis --
-    an error that confidently states the wrong cause is worse than no
-    diagnosis at all.
-    """
-    message = _spotify_message(response)
-
-    if "premium" in message.lower():
-        return (
-            f"Spotify refused the request: {message}\n\n"
-            "This is the Premium gate on registered apps, not a problem with your "
-            "session -- since 2025 Spotify blocks all Web API access for apps whose "
-            "owner has no Premium subscription, and re-authenticating will not help.\n\n"
-            "Use the sign-in path instead, which registers no app and is unaffected:\n"
-            "  migratify login spotify"
-        )
-
-    detail = f": {message}" if message else "."
-    return (
-        f"Spotify refused this action (403){detail}\n"
-        "Run: migratify login spotify"
-    )
 
 
 class SpotifyProvider:
@@ -97,173 +39,104 @@ class SpotifyProvider:
     supports_cover_upload = True
 
     def __init__(self) -> None:
-        self._client = httpx.Client(timeout=30)
+        self._client = SpotifyWebClient()
         self._user_id: str | None = None
 
-    # -- plumbing ------------------------------------------------------------
-
-    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
-        url = path if path.startswith("http") else f"{API}{path}"
-
-        for attempt in range(5):
-            headers = kwargs.pop("headers", {}) | {
-                "Authorization": f"Bearer {spotify_session.bearer_token()}"
-            }
-            response = self._client.request(method, url, headers=headers, **kwargs)
-
-            if response.status_code == 429:
-                # Spotify states the backoff; inventing one is either wasteful
-                # or gets us throttled again immediately.
-                wait = int(response.headers.get("Retry-After", "2")) + 1
-                log.warning("Spotify rate limit hit, waiting %ss", wait)
-                time.sleep(wait)
-                continue
-
-            if response.status_code == 401:
-                if attempt == 0:
-                    # The token aged out mid-run; the next loop mints a fresh one.
-                    log.debug("Spotify returned 401, refreshing the token")
-                    continue
-                raise AuthError("Spotify rejected the session. Run: migratify login spotify")
-
-            if response.status_code == 403:
-                raise AuthError(_explain_403(response))
-
-            if response.status_code >= 400:
-                raise ProviderError(f"Spotify {method} {path} failed ({response.status_code}): {response.text[:300]}")
-
-            return response
-
-        raise ProviderError("Spotify kept rate limiting the request; giving up.")
-
-    def _get(self, path: str, **params) -> dict:
-        return self._request("GET", path, params=params or None).json()
-
-    def _paginate(self, path: str, limit: int, **params) -> list[dict]:
-        """Walk a paged collection to the end, following Spotify's own cursor."""
-        items: list[dict] = []
-        page = self._get(path, limit=limit, **params)
-        while True:
-            items.extend(page.get("items", []))
-            next_url = page.get("next")
-            if not next_url:
-                return items
-            page = self._request("GET", next_url).json()
+    # -- identity ------------------------------------------------------------
 
     def _me(self) -> str:
         if self._user_id is None:
-            self._user_id = self._get("/me")["id"]
+            data = self._client.query("profileAttributes")
+            uri = shapes.dig(data, "me", "profile", "uri")
+            self._user_id = shapes.id_from_uri(uri)
+            if not self._user_id:
+                raise ProviderError(
+                    "Could not read your Spotify user ID. Run: migratify login spotify"
+                )
         return self._user_id
-
-    # -- parsing -------------------------------------------------------------
-
-    @staticmethod
-    def _to_track(raw: dict) -> Track | None:
-        # Local files and removed tracks come back as null or without an ID.
-        if not raw or not raw.get("id"):
-            return None
-
-        album = raw.get("album") or {}
-        release = album.get("release_date") or ""
-
-        return Track(
-            provider=Provider.SPOTIFY,
-            id=raw["id"],
-            title=raw.get("name", ""),
-            artists=[a["name"] for a in raw.get("artists", []) if a.get("name")],
-            artist_ids=[a["id"] for a in raw.get("artists", []) if a.get("id")],
-            album=album.get("name"),
-            duration_ms=raw.get("duration_ms"),
-            isrc=(raw.get("external_ids") or {}).get("isrc"),
-            explicit=bool(raw.get("explicit")),
-            release_year=int(release[:4]) if release[:4].isdigit() else None,
-            kind=ResultKind.SONG,
-            official=True,
-        )
-
-    @staticmethod
-    def _to_playlist(raw: dict) -> Playlist:
-        images = raw.get("images") or []
-        return Playlist(
-            provider=Provider.SPOTIFY,
-            id=raw["id"],
-            name=raw.get("name", "Untitled"),
-            description=raw.get("description") or None,
-            # Spotify returns images widest-first.
-            cover_url=images[0]["url"] if images else None,
-            track_count=(raw.get("tracks") or {}).get("total"),
-            owner=(raw.get("owner") or {}).get("display_name"),
-            public=bool(raw.get("public")),
-            url=(raw.get("external_urls") or {}).get("spotify"),
-        )
 
     # -- reading -------------------------------------------------------------
 
     def list_playlists(self, limit: int = 50) -> list[Playlist]:
-        items = self._paginate("/me/playlists", limit=min(limit, PLAYLISTS_PAGE))
-        return [self._to_playlist(item) for item in items if item]
+        found: list[Playlist] = []
+        offset = 0
+
+        while len(found) < limit:
+            page = self._client.query(
+                "libraryV3", {"limit": min(LIBRARY_PAGE, limit), "offset": offset}
+            )
+            batch = shapes.parse_library(page)
+            raw_count = len(shapes.dig(page, "me", "libraryV3", "items", default=[]) or [])
+            found.extend(batch)
+
+            # Page on the raw count, not the filtered one: a page made entirely
+            # of artists and albums yields no playlists but is not the end.
+            if raw_count == 0:
+                break
+            offset += raw_count
+
+        return found[:limit]
 
     def get_playlist(self, playlist_id: str) -> Playlist:
-        return self._to_playlist(self._get(f"/playlists/{playlist_id}"))
+        data = self._client.query(
+            "fetchPlaylistMetadata", {"uri": f"spotify:playlist:{playlist_id}"}
+        )
+        return shapes.parse_playlist(data, playlist_id)
 
     def get_tracks(self, playlist_id: str) -> list[Track]:
-        items = self._paginate(
-            f"/playlists/{playlist_id}/tracks",
-            limit=TRACKS_PAGE,
-            additional_types="track",
-        )
-        tracks = []
-        for item in items:
-            track = self._to_track(item.get("track") or {})
-            if track is not None:
-                tracks.append(track)
+        uri = f"spotify:playlist:{playlist_id}"
+        tracks: list[Track] = []
+        offset = 0
+
+        while True:
+            page = self._client.query(
+                "fetchPlaylistContents",
+                {"uri": uri, "offset": offset, "limit": TRACKS_PAGE},
+            )
+            batch, total = shapes.parse_playlist_tracks(page)
+            tracks.extend(batch)
+
+            offset += TRACKS_PAGE
+            if total is None or offset >= total:
+                break
+
         return tracks
 
     # -- searching -----------------------------------------------------------
 
     def build_queries(self, track: Track) -> list[SearchQuery]:
-        """Field-filtered queries first, free text as the safety net.
+        """Free-text queries only.
 
-        Spotify's field filters are precise but brittle: a title whose
-        punctuation differs slightly can return nothing at all. So the strict
-        queries run first for their precision, and an unfiltered query follows
-        to catch what they miss.
+        The public API's ``track:``/``artist:``/``isrc:`` field filters do not
+        exist here -- the internal search takes a plain term, the same one the
+        search box sends. So precision has to come from the scorer rather than
+        from the query, which is what it was built for anyway.
         """
         from migratify.matching.normalize import normalize_track
 
         norm = normalize_track(track)
         queries: list[SearchQuery] = []
 
-        if track.isrc:
-            # Recording identity. A hit here needs no further searching.
-            queries.append(SearchQuery(f"isrc:{track.isrc}", "isrc", decisive=True))
-
         if norm.title and norm.primary_artist:
-            queries.append(
-                SearchQuery(
-                    f'track:"{norm.title}" artist:"{norm.primary_artist}"',
-                    "fielded",
-                )
-            )
-            queries.append(SearchQuery(f"{norm.title} {norm.primary_artist}", "free-text"))
+            queries.append(SearchQuery(f"{norm.title} {norm.primary_artist}", "title-artist"))
+            queries.append(SearchQuery(f"{norm.primary_artist} {norm.title}", "artist-title"))
+
+        all_artists = " ".join(sorted(norm.artists))
+        if all_artists and all_artists != norm.primary_artist:
+            queries.append(SearchQuery(f"{track.title} {all_artists}", "full-credit"))
 
         if norm.album and norm.primary_artist:
             queries.append(
-                SearchQuery(
-                    f'album:"{norm.album}" artist:"{norm.primary_artist}" {norm.title}',
-                    "album-scoped",
-                )
+                SearchQuery(f"{norm.title} {norm.album} {norm.primary_artist}", "album-scoped")
             )
 
-        if not queries:
-            queries.append(SearchQuery(track.title, "title-only"))
-
-        return queries
+        return queries or [SearchQuery(track.title, "title-only")]
 
     def search(self, query: SearchQuery, limit: int = 10) -> list[Track]:
-        payload = self._get("/search", q=query.text, type="track", limit=limit)
-        items = (payload.get("tracks") or {}).get("items") or []
-        return [t for t in (self._to_track(item) for item in items) if t is not None]
+        data = self._client.query(
+            "searchTracks", {"searchTerm": query.text, "offset": 0, "limit": limit}
+        )
+        return shapes.parse_search_tracks(data)[:limit]
 
     # -- writing -------------------------------------------------------------
 
@@ -273,39 +146,139 @@ class SpotifyProvider:
         description: str | None = None,
         public: bool = False,
     ) -> str:
-        body: dict = {"name": name, "public": public}
+        """Create a playlist through spclient.
+
+        Two calls, because Spotify splits them: one creates the playlist and
+        returns its URI, a second attaches the name and description. The
+        second failing is not fatal -- an untitled playlist with the right
+        tracks is recoverable, a lost migration is not.
+        """
+        response = self._client.spclient(
+            "POST",
+            f"/playlist/v2/user/{self._me()}/rootlist/changes",
+            json={
+                "deltas": [
+                    {
+                        "ops": [
+                            {
+                                "kind": "ADD",
+                                "add": {
+                                    "addFirst": True,
+                                    "items": [{"attributes": {"formatAttributes": []}}],
+                                },
+                            }
+                        ]
+                    }
+                ]
+            },
+        )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"Spotify refused to create the playlist ({response.status_code}): "
+                f"{response.text[:300]}"
+            )
+
+        playlist_id = self._extract_created_id(response.json())
+        if not playlist_id:
+            raise ProviderError(
+                "Spotify created something but did not return a playlist ID."
+            )
+
+        try:
+            self._set_metadata(playlist_id, name, description, public)
+        except ProviderError as exc:
+            log.warning("Playlist created but naming it failed: %s", exc)
+
+        return playlist_id
+
+    @staticmethod
+    def _extract_created_id(payload: dict) -> str | None:
+        for key in ("uri", "playlistUri", "resultUri"):
+            candidate = shapes.id_from_uri(payload.get(key))
+            if candidate:
+                return candidate
+        # Some responses nest the new URI inside the applied delta.
+        for delta in payload.get("deltas") or []:
+            for op in delta.get("ops") or []:
+                candidate = shapes.id_from_uri(shapes.dig(op, "add", "items", 0, "uri"))
+                if candidate:
+                    return candidate
+        return None
+
+    def _set_metadata(
+        self, playlist_id: str, name: str, description: str | None, public: bool
+    ) -> None:
+        attributes: dict = {"name": name}
         if description:
-            # Spotify silently truncates past 300 characters.
-            body["description"] = description[:300]
-        response = self._request("POST", f"/users/{self._me()}/playlists", json=body)
-        return response.json()["id"]
+            # Spotify truncates past 300 characters.
+            attributes["description"] = description[:300]
+
+        response = self._client.spclient(
+            "POST",
+            f"/playlist/v2/playlist/{playlist_id}/changes",
+            json={"deltas": [{"ops": [{"kind": "UPDATE_LIST_ATTRIBUTES",
+                                       "updateListAttributes": {"newAttributes":
+                                                                {"values": attributes}}}]}]},
+        )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"Could not set the playlist name ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
 
     def add_tracks(self, playlist_id: str, track_ids: list[str]) -> int:
         added = 0
+
         for start in range(0, len(track_ids), ADD_BATCH):
             batch = track_ids[start : start + ADD_BATCH]
-            self._request(
+            response = self._client.spclient(
                 "POST",
-                f"/playlists/{playlist_id}/tracks",
-                json={"uris": [f"spotify:track:{tid}" for tid in batch]},
+                f"/playlist/v2/playlist/{playlist_id}/changes",
+                json={
+                    "deltas": [
+                        {
+                            "ops": [
+                                {
+                                    "kind": "ADD",
+                                    "add": {
+                                        "addLast": True,
+                                        "items": [
+                                            {"uri": f"spotify:track:{tid}"} for tid in batch
+                                        ],
+                                    },
+                                }
+                            ]
+                        }
+                    ]
+                },
             )
+            if response.status_code >= 400:
+                raise ProviderError(
+                    f"Spotify refused to add tracks ({response.status_code}): "
+                    f"{response.text[:300]}"
+                )
             added += len(batch)
+
         return added
 
     def set_cover(self, playlist_id: str, jpeg_bytes: bytes) -> bool:
         encoded = base64.b64encode(jpeg_bytes)
         if len(encoded) > MAX_COVER_BYTES:
-            # The caller is expected to have compressed it already; refusing is
-            # better than a 413 the user cannot interpret.
             raise ProviderError(
                 f"Cover is {len(encoded) // 1024} KB base64-encoded; Spotify allows 256 KB."
             )
-        self._request(
+
+        response = self._client.spclient(
             "PUT",
-            f"/playlists/{playlist_id}/images",
+            f"/playlist-image/v1/playlist/{playlist_id}",
             content=encoded,
-            headers={"Content-Type": "image/jpeg"},
+            headers={"content-type": "image/jpeg"},
         )
+        if response.status_code >= 400:
+            log.warning(
+                "Cover upload refused (%s): %s", response.status_code, response.text[:200]
+            )
+            return False
         return True
 
     # -- identity ------------------------------------------------------------
@@ -321,7 +294,6 @@ class SpotifyProvider:
             return tail.split("?", 1)[0].split("/", 1)[0] or None
         if ref.startswith("spotify:playlist:"):
             return ref.split(":", 2)[2] or None
-        # A bare base62 ID.
         if ref.isalnum() and len(ref) == 22:
             return ref
         return None
