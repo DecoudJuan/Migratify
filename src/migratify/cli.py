@@ -17,11 +17,13 @@ Commands:
     sync        migrate again, adding only what is new
     report      re-render a finished run
     runs        what you have done before
+    shell       the interactive prompt -- also what a bare `migratify` opens
     help        all of the above, on one screen
 """
 
 from __future__ import annotations
 
+import sys
 import uuid
 
 import typer
@@ -49,11 +51,29 @@ console = Console()
 app = typer.Typer(
     name="migratify",
     help="Move playlists between Spotify and YouTube Music, without the wrong songs.",
-    no_args_is_help=True,
     add_completion=False,
 )
 auth_app = typer.Typer(help="Fallback auth flows and connection status.", no_args_is_help=True)
 app.add_typer(auth_app, name="auth")
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context) -> None:
+    """Move playlists between Spotify and YouTube Music, without the wrong songs."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    # No command at all. On a terminal that means the binary was opened rather
+    # than invoked -- printing help and exiting would close the window before
+    # it could be read -- so open the prompt instead. Piped or redirected, no
+    # one is there to type: fall back to the help text.
+    if sys.stdin is not None and sys.stdin.isatty():
+        from migratify import shell
+
+        shell.run(console)
+    else:
+        typer.echo(ctx.get_help())
+    raise typer.Exit()
 
 
 # --- helpers ----------------------------------------------------------------
@@ -758,6 +778,14 @@ def runs(limit: int = typer.Option(20, "--limit")) -> None:
     console.print(table)
 
 
+@app.command("shell")
+def shell_cmd() -> None:
+    """Open the interactive prompt."""
+    from migratify import shell as shell_module
+
+    shell_module.run(console)
+
+
 # --- help -------------------------------------------------------------------
 
 _COMMANDS: list[tuple[str, str, str]] = [
@@ -772,6 +800,7 @@ _COMMANDS: list[tuple[str, str, str]] = [
     ("sync", "<playlist> [--to S]", "Migrate again, adding only the tracks that are new."),
     ("report", "[run-id] [--format md|csv|json]", "Re-render a finished run."),
     ("runs", "[--limit N]", "Past runs, with their IDs."),
+    ("shell", "", "The interactive prompt. A bare `migratify` opens it too."),
     ("help", "", "This overview."),
 ]
 

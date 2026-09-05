@@ -72,6 +72,19 @@ def verify() -> None:
             f"{result.stdout[-2000:]}\n{result.stderr[-2000:]}"
         )
 
+    # Opened rather than invoked, the binary starts an interactive prompt. With
+    # no terminal to type at -- CI, a pipe, this check -- it has to print its
+    # help and leave instead of waiting forever for a line that never comes.
+    try:
+        subprocess.run(
+            [str(executable)],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        sys.exit("The binary hangs when run with no arguments and no terminal.")
+
 
 def main() -> None:
     build()
