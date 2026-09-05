@@ -6,6 +6,10 @@ Three jobs:
   migration continues instead of starting over.
 * **Idempotency.** A run knows which destination playlist it created and what
   it already wrote, so re-running does not duplicate anything.
+* **Sync.** A finished run records which destination playlist it filled and
+  which source tracks reached it, so a later run against the same playlist can
+  add only what is new -- per destination, so migrating somewhere new still
+  migrates everything.
 * **Cache.** A track resolved once is never searched again -- in any playlist,
   in either direction, across runs. Search is the slow, rate-limited part of a
   migration, so this is what makes the second run of anything nearly instant.
@@ -78,6 +82,9 @@ CREATE TABLE IF NOT EXISTS match_cache (
 );
 
 CREATE INDEX IF NOT EXISTS idx_run_tracks_decision ON run_tracks(run_id, decision);
+
+CREATE INDEX IF NOT EXISTS idx_runs_link
+    ON runs(source_provider, source_playlist_id, target_provider);
 """
 
 
@@ -204,6 +211,76 @@ class Store:
         )
         self._db.commit()
         return counts
+
+    # -- sync ----------------------------------------------------------------
+
+    def find_link(
+        self,
+        source_provider: Provider,
+        source_playlist_id: str,
+        target_provider: Provider,
+    ) -> Run | None:
+        """The most recent run that actually created a destination playlist.
+
+        Keyed on the *destination service* as well as the source, which is the
+        whole point: a playlist already carried to YouTube Music has a link
+        there and only needs its new tracks, while the same playlist has no
+        link to a service it has never been migrated to and must go across in
+        full. Adding a provider therefore needs nothing here.
+
+        Any run with a destination playlist counts, not only a cleanly applied
+        one -- a run that created the playlist and then failed halfway still
+        left tracks in it, and those must not be added twice.
+        """
+        row = self._db.execute(
+            """SELECT * FROM runs
+               WHERE source_provider = ? AND source_playlist_id = ?
+                 AND target_provider = ? AND target_playlist_id IS NOT NULL
+               ORDER BY created_at DESC LIMIT 1""",
+            (source_provider.value, source_playlist_id, target_provider.value),
+        ).fetchone()
+        return self._row_to_run(row) if row else None
+
+    def written_source_ids(
+        self,
+        source_provider: Provider,
+        source_playlist_id: str,
+        target_provider: Provider,
+        target_playlist_id: str,
+    ) -> set[str]:
+        """Source track ids already written into that destination playlist.
+
+        Read across every run that filled it, so a migration split over several
+        attempts still knows the whole of what it has done.
+
+        Only tracks flagged ``written`` count. A track that was matched but
+        never applied, was left in review, or was not found at all stays
+        outstanding and gets another chance on the next sync -- which is the
+        same reason misses are never cached: catalogs change.
+        """
+        rows = self._db.execute(
+            """SELECT rt.source_json FROM run_tracks rt
+               JOIN runs r ON r.id = rt.run_id
+               WHERE r.source_provider = ? AND r.source_playlist_id = ?
+                 AND r.target_provider = ? AND r.target_playlist_id = ?
+                 AND rt.written = 1""",
+            (
+                source_provider.value,
+                source_playlist_id,
+                target_provider.value,
+                target_playlist_id,
+            ),
+        ).fetchall()
+
+        written: set[str] = set()
+        for row in rows:
+            try:
+                written.add(json.loads(row["source_json"])["id"])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # A row we cannot read is a row we cannot claim to have
+                # written; leaving it out only means re-matching one track.
+                log.debug("Unreadable source_json in run_tracks", exc_info=True)
+        return written
 
     # -- results -------------------------------------------------------------
 
