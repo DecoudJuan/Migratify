@@ -66,20 +66,43 @@ class SpotifyProvider:
     def __init__(self) -> None:
         self._client = SpotifyWebClient()
         self._user_id: str | None = None
+        self._profile_data: dict | None = None
         self._liked: list[str] | None = None
 
     # -- identity ------------------------------------------------------------
 
+    def _profile(self) -> dict:
+        """The signed-in profile, read once and kept.
+
+        One call answers both who we are for the collection service and who we
+        are for the person reading the output, so it is cached rather than
+        asked twice.
+        """
+        if self._profile_data is None:
+            data = self._client.query("profileAttributes")
+            self._profile_data = shapes.dig(data, "me", "profile", default={}) or {}
+        return self._profile_data
+
     def _me(self) -> str:
         if self._user_id is None:
-            data = self._client.query("profileAttributes")
-            uri = shapes.dig(data, "me", "profile", "uri")
-            self._user_id = shapes.id_from_uri(uri)
+            self._user_id = shapes.id_from_uri(self._profile().get("uri"))
             if not self._user_id:
                 raise ProviderError(
                     "Could not read your Spotify user ID. Run: migratify login spotify"
                 )
         return self._user_id
+
+    def account_label(self) -> str | None:
+        """Display name and username -- never the email, which we do not read."""
+        try:
+            profile = self._profile()
+        except ProviderError:
+            return None
+        name = profile.get("name")
+        username = profile.get("username")
+        if name and username and name != username:
+            return f"{name} ({username})"
+        return name or username or None
 
     # -- reading -------------------------------------------------------------
 

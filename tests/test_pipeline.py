@@ -58,6 +58,9 @@ class FakeProvider:
     def set_cover(self, playlist_id: str, jpeg_bytes: bytes) -> bool:
         return False
 
+    def account_label(self) -> str | None:
+        return "test account"
+
     def playlist_url(self, playlist_id: str) -> str:
         return f"https://music.youtube.com/playlist?list={playlist_id}"
 

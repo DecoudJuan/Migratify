@@ -590,11 +590,27 @@ def apply(
             return
 
         still_pending = len(pending_review(results))
+
+        # Connect before asking, not after. The destination account is the one
+        # thing that cannot be checked once the write has happened: a playlist
+        # created in the wrong Google account or Spotify profile is invisible
+        # from the right one, and looks exactly like a playlist that was never
+        # created at all. So it belongs on the confirmation, where it can still
+        # change the answer.
+        try:
+            src = get_provider(run.source_provider)
+            dst = get_provider(run.target_provider)
+        except ProviderError as exc:
+            _fail(str(exc))
+            return
+
+        account = dst.account_label()
         console.print(
             Panel(
                 f"[bold]{run.source_playlist_name}[/bold]\n"
-                f"{run.direction}\n\n"
-                f"{len(to_write)} tracks will be added"
+                f"{run.direction}\n"
+                + (f"account: [bold]{account}[/bold]\n" if account else "")
+                + f"\n{len(to_write)} tracks will be added"
                 + (
                     f"\n[yellow]{still_pending} unresolved matches will be left out[/yellow]"
                     if still_pending
@@ -609,8 +625,6 @@ def apply(
             return
 
         try:
-            src = get_provider(run.source_provider)
-            dst = get_provider(run.target_provider)
             source_playlist = src.get_playlist(run.source_playlist_id)
 
             description = source_playlist.description or ""
@@ -630,6 +644,8 @@ def apply(
                 run.target_playlist_id = playlist_id
                 store.update_run(run)
                 console.print(f"[green]Created[/green] {dst.playlist_url(playlist_id)}")
+                if account:
+                    console.print(f"[dim]in {account}[/dim]")
 
             ids = [r.chosen_id for r in to_write if r.chosen_id]
             added = dst.add_tracks(playlist_id, ids)
@@ -657,7 +673,15 @@ def apply(
             _fail(str(exc))
             return
 
-    console.print(f"\n[bold green]Done.[/bold green] {dst.playlist_url(playlist_id)}")
+    console.print("\n[bold green]Done.[/bold green]")
+    console.print(f"  url:     {dst.playlist_url(playlist_id)}")
+    console.print(
+        f"  account: {account} on {run.target_provider.label}"
+        if account
+        # Only reachable when the service will not name the account. Say that
+        # much, rather than leaving a blank where the answer should be.
+        else f"  account: [dim]{run.target_provider.label} would not say[/dim]"
+    )
 
 
 # --- migrate ----------------------------------------------------------------

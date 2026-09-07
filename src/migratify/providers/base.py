@@ -141,6 +141,19 @@ class MusicProvider(Protocol):
     def playlist_url(self, playlist_id: str) -> str:
         """A URL a human can open."""
 
+    def account_label(self) -> str | None:
+        """Who this service is signed in as, in terms a person recognizes.
+
+        Shown before and after a write, because a playlist created in the
+        wrong account is indistinguishable from a playlist that was never
+        created: the URL opens to nothing. Naming the account turns that into
+        an obvious "log in as someone else".
+
+        Best effort by design -- returns None when the service will not say,
+        and must never raise. Not knowing who we are is not a reason to refuse
+        a migration.
+        """
+
     @staticmethod
     def parse_playlist_ref(ref: str) -> str | None:
         """Extract a playlist ID from a URL, URI or bare ID.

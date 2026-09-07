@@ -308,6 +308,27 @@ class YouTubeMusicProvider:
     def playlist_url(self, playlist_id: str) -> str:
         return f"https://music.youtube.com/playlist?list={self._native(playlist_id)}"
 
+    def account_label(self) -> str | None:
+        """Channel name and handle.
+
+        The handle is the part that settles it: several Google accounts, and
+        every brand account under one of them, can carry the same display
+        name, and a playlist written to the wrong one of those is invisible
+        from the right one.
+
+        Whatever goes wrong here is swallowed -- this is a label, not a step.
+        """
+        try:
+            info = self._client.get_account_info() or {}
+        except Exception:
+            log.debug("No YouTube Music account info", exc_info=True)
+            return None
+        name = info.get("accountName")
+        handle = info.get("channelHandle")
+        if name and handle:
+            return f"{name} ({handle})"
+        return name or handle or None
+
     @staticmethod
     def parse_playlist_ref(ref: str) -> str | None:
         ref = ref.strip()
