@@ -30,6 +30,15 @@ log = get_logger(__name__)
 TRACKS_PAGE = 100
 LIBRARY_PAGE = 50
 
+#: The player has renamed its playlist reads between releases: a page of
+#: contents used to come from ``fetchPlaylistContents`` and now comes from
+#: ``fetchPlaylist``, which carries the metadata too. Both take the same
+#: uri/offset/limit variables, so we name every spelling we know and let the
+#: client use whichever one this web player actually issues -- pinning one name
+#: breaks on Spotify's schedule exactly the way pinning a hash would.
+PLAYLIST_CONTENTS = ("fetchPlaylistContents", "fetchPlaylist")
+PLAYLIST_METADATA = ("fetchPlaylistMetadata", "fetchPlaylist")
+
 #: spclient accepts large change batches, but a smaller one is cheaper to
 #: retry and gives better progress reporting on a long playlist.
 ADD_BATCH = 100
@@ -210,7 +219,7 @@ class SpotifyProvider:
             )
 
         data = self._client.query(
-            "fetchPlaylistMetadata", {"uri": f"spotify:playlist:{playlist_id}"}
+            PLAYLIST_METADATA, {"uri": f"spotify:playlist:{playlist_id}"}
         )
         return shapes.parse_playlist(data, playlist_id)
 
@@ -224,7 +233,7 @@ class SpotifyProvider:
 
         while True:
             page = self._client.query(
-                "fetchPlaylistContents",
+                PLAYLIST_CONTENTS,
                 {"uri": uri, "offset": offset, "limit": TRACKS_PAGE},
             )
             batch, total = shapes.parse_playlist_tracks(page)

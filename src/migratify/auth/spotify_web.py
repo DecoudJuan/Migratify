@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -62,6 +63,10 @@ SPCLIENT = "https://spclient.wg.spotify.com"
 #: set of operations; together they cover everything Migratify needs.
 _CAPTURE_PAGES = (
     ("https://open.spotify.com/collection/playlists", 11_000),
+    # A playlist page is the only one that issues the contents read, and it has
+    # to be a playlist that exists for everyone -- the library page happens to
+    # prefetch one, but only when the sidebar has something to prefetch.
+    ("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M", 9_000),
     ("https://open.spotify.com/search/mogwai/tracks", 9_000),
 )
 
@@ -280,27 +285,47 @@ class SpotifyWebClient:
 
     # -- pathfinder ----------------------------------------------------------
 
-    def query(self, operation: str, overrides: dict[str, Any] | None = None) -> dict:
+    def _resolve(self, names: Sequence[str]) -> tuple[str, dict[str, Any]] | None:
+        """The first of ``names`` we know how to send, observed or pinned."""
+        for name in names:
+            spec = self._session.operations.get(name) or _pinned(name)
+            if spec is not None:
+                return name, spec
+        return None
+
+    def query(
+        self, operation: str | Sequence[str], overrides: dict[str, Any] | None = None
+    ) -> dict:
         """Run a captured GraphQL operation.
+
+        ``operation`` may be several names in preference order. The player
+        renames its reads between releases -- a page of playlist contents came
+        from ``fetchPlaylistContents`` and now comes from ``fetchPlaylist`` --
+        and both spellings take the same variables, so asking for whichever one
+        this client actually issues is the same trick as not pinning hashes.
 
         ``overrides`` are merged onto the variables the player itself sent, so
         we only ever specify what we mean to change. Fields we do not
         understand keep whatever value the real client used, which is what
         makes this survive schema changes.
         """
+        names = (operation,) if isinstance(operation, str) else tuple(operation)
+
         for attempt in range(2):
-            spec = self._session.operations.get(operation) or _pinned(operation)
-            if spec is None:
+            resolved = self._resolve(names)
+            if resolved is None:
                 if attempt == 0:
                     # An operation we have not seen yet -- the player may issue
                     # it only on a page we have not visited this run.
                     self._session = capture()
                     continue
+                wanted = " or ".join(repr(name) for name in names)
                 raise ProviderError(
-                    f"Spotify operation {operation!r} was not observed in the web player. "
+                    f"Spotify operation {wanted} was not observed in the web player. "
                     "It may have been renamed in a new release."
                 )
 
+            operation, spec = resolved
             variables = copy.deepcopy(spec["variables"])
             variables.update(overrides or {})
 
