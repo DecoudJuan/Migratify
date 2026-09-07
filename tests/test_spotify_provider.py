@@ -149,5 +149,5 @@ class TestOperationNames:
             "migratify.auth.spotify_web.capture", lambda: client._session
         )
 
-        with pytest.raises(ProviderError, match="fetchPlaylistContents.*fetchPlaylist"):
+        with pytest.raises(ProviderError, match=r"fetchPlaylistContents.*fetchPlaylist"):
             client.query(PLAYLIST_CONTENTS, {"uri": "spotify:playlist:abc"})
