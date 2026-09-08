@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
+[**migratify.vercel.app**](https://migratify.vercel.app) · [Download for Windows or macOS](https://github.com/DecoudJuan/Migratify/releases/latest)
+
 Moving a playlist is easy. Moving it *correctly* is not.
 
 Every playlist migrator hits the same wall: the same song title exists as a
@@ -377,6 +379,10 @@ pytest
 ```
 
 Extras: `[login]` for browser automation, `[package]` for the binary build.
+
+The landing page lives in [`web/`](web/README.md) — static HTML, no build step,
+deployed from that folder. It quotes the matcher's weights and thresholds, so
+they have to move together with the code.
 
 The scorer is a pure function, so the golden set of hard matching cases runs
 entirely offline. See [CLAUDE.md](CLAUDE.md) for the architecture and the
