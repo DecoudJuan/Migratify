@@ -198,10 +198,10 @@ opens on a terminal — piped or redirected, help is still the right answer, and
 
 | | Item |
 |---|---|
-| ✅ | `web/` — a static bilingual landing page, English at `/` and Spanish at `/es` |
+| ✅ | `web/` — a static bilingual landing page, English at `/` and Spanish at `/es/` |
 | ✅ | SEO: canonical + `hreflang` pair, Open Graph and Twitter cards, `SoftwareApplication` and `FAQPage` JSON-LD, `robots.txt`, `sitemap.xml` |
 | ✅ | `scripts/build_og.py` — the 1200×630 social card, drawn with Pillow |
-| ✅ | `vercel.json` — clean URLs, cache and security headers, `/download` → the latest release |
+| ✅ | `.github/workflows/pages.yml` — published to GitHub Pages on any push that touches `web/` |
 
 Two files, one stylesheet and about two kilobytes of script. No framework and
 no build step: a page that exists to hand someone a download does not need a
@@ -221,6 +221,13 @@ output with box-drawing characters looked right in a terminal and fell apart in
 a browser: whichever font supplies the glyphs the webfont is missing brings its
 own advance width, so a border made of `─` never lines up with the ASCII beside
 it.
+
+**Every path is relative.** The site is a *project* page, so it is served from
+`decoudjuan.github.io/Migratify/` rather than a domain root, and a
+root-absolute `/assets/style.css` would 404 only in production. Relative paths
+also mean the same files work unchanged if it ever moves to its own domain.
+Pages serves no clean URLs either, so Spanish is linked as `es/`, with the
+slash, everywhere — including the `hreflang` pair and the sitemap.
 
 **What it claims, it claims exactly.** The weights, the thresholds, the veto
 cap, the platform limits and the download size on the page are the ones in

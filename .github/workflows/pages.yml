@@ -1,0 +1,54 @@
+name: Pages
+
+# Publishes web/ to https://decoudjuan.github.io/Migratify/
+#
+# An Actions deploy rather than the branch-and-folder kind, because that one
+# can only serve the repository root or /docs -- and this is a Python project
+# with a site in it, not a site. The folder stays named for what it holds.
+#
+# Requires one setting, once: Settings -> Pages -> Build and deployment ->
+# Source: GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+    # The site is the only thing this workflow can affect, so it only runs
+    # when the site changes. A release build has nothing to do with it.
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race for the same site; queue instead of cancelling,
+# so the last push is the one that ends up live.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy web/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload
+        # The whole folder, verbatim. There is no build step to get wrong:
+        # two HTML files, a stylesheet, a script and three static assets.
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

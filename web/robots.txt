@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://migratify.vercel.app/sitemap.xml
+Sitemap: https://decoudjuan.github.io/Migratify/sitemap.xml

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-[**migratify.vercel.app**](https://migratify.vercel.app) · [Download for Windows or macOS](https://github.com/DecoudJuan/Migratify/releases/latest)
+[**decoudjuan.github.io/Migratify**](https://decoudjuan.github.io/Migratify/) · [Download for Windows or macOS](https://github.com/DecoudJuan/Migratify/releases/latest)
 
 Moving a playlist is easy. Moving it *correctly* is not.
 
