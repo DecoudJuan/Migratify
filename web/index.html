@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Transfer Spotify playlists to YouTube Music (and back) — Migratify</title>
+<meta name="description" content="Free, open-source tool that moves playlists both ways between Spotify and YouTube Music — tracks, name, description, cover art and Liked Songs. It never silently adds the wrong song.">
+<meta name="keywords" content="transfer spotify playlist to youtube music, move playlist youtube music to spotify, playlist migration tool, migrate liked songs, spotify to youtube music converter, open source playlist transfer">
+<meta name="author" content="Juan Decoud">
+<meta name="theme-color" content="#08090c">
+<meta name="robots" content="index, follow, max-image-preview:large">
+
+<link rel="canonical" href="https://migratify.vercel.app/">
+<link rel="alternate" hreflang="en" href="https://migratify.vercel.app/">
+<link rel="alternate" hreflang="es" href="https://migratify.vercel.app/es">
+<link rel="alternate" hreflang="x-default" href="https://migratify.vercel.app/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Migratify">
+<meta property="og:title" content="Transfer Spotify playlists to YouTube Music (and back)">
+<meta property="og:description" content="A precision-first CLI that migrates playlists in both directions — tracks, cover art and Liked Songs. When it is not sure, it asks instead of guessing.">
+<meta property="og:url" content="https://migratify.vercel.app/">
+<meta property="og:image" content="https://migratify.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Migratify — Spotify and YouTube Music playlist migration in a terminal">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="es_ES">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Transfer Spotify playlists to YouTube Music (and back)">
+<meta name="twitter:description" content="A precision-first CLI that migrates playlists in both directions. When it is not sure, it asks instead of guessing.">
+<meta name="twitter:image" content="https://migratify.vercel.app/og.png">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/favicon.svg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="/assets/style.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Migratify",
+      "url": "https://migratify.vercel.app/",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Playlist migration",
+      "operatingSystem": "Windows, macOS, Linux",
+      "softwareVersion": "0.3.1",
+      "downloadUrl": "https://github.com/DecoudJuan/Migratify/releases/latest",
+      "installUrl": "https://github.com/DecoudJuan/Migratify#install",
+      "codeRepository": "https://github.com/DecoudJuan/Migratify",
+      "programmingLanguage": "Python",
+      "license": "https://github.com/DecoudJuan/Migratify/blob/main/LICENSE",
+      "description": "Command-line tool that migrates playlists bidirectionally between Spotify and YouTube Music, carrying tracks, name, description and cover art, with a precision-first matcher that queues ambiguous tracks for review instead of guessing.",
+      "featureList": [
+        "Spotify to YouTube Music and YouTube Music to Spotify",
+        "Migrates Liked Songs and saved libraries",
+        "Carries playlist name, description and cover art",
+        "Weighted matching on artist, title and duration with wrong-artist and wrong-version vetoes",
+        "Read-only planning: nothing is written until you apply",
+        "Sync mode that adds only newly added tracks",
+        "Markdown, CSV and JSON reports"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": { "@type": "Person", "name": "Juan Decoud" },
+      "isAccessibleForFree": true
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How do I transfer a Spotify playlist to YouTube Music?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Install Migratify, run migratify login once to sign in to both services, then run migratify migrate followed by the playlist URL. Migratify detects the direction from the link, matches every track against YouTube Music, asks you about the ones it cannot decide, and only then creates the playlist."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it also move playlists from YouTube Music to Spotify?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The same engine runs in both directions and the direction is taken from the URL you paste: a Spotify link migrates to YouTube Music, a YouTube Music link migrates to Spotify. Nothing about the matching changes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I migrate my Liked Songs or saved library?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, in either direction: migratify migrate liked --to ytmusic, or --to spotify. Your saved library lands as an ordinary playlist on the other service. Migratify never writes into a saved library, because an unwanted playlist takes one click to delete and several hundred saved tracks do not."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need a Spotify developer app, client ID or API key?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. You sign in the way you always do, in a browser window, and Migratify captures that session locally. There is nothing to register and nothing to paste."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it work on a free Spotify account?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, and that is why signing in is the default path. Since 2025 Spotify requires a Premium subscription for a newly registered app to reach the Web API, so the usual register-an-app flow is unavailable on a free account. Signing in does not touch that gate."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will it add the wrong version of a song?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "That is the failure Migratify is built to avoid. Every candidate is scored on artist, title, duration, album and result type. A wrong-artist candidate is vetoed below the review floor so it cannot even be offered. Each differing version tag — live, remix, acoustic, karaoke, sped up — costs 25 points. A track only auto-accepts at 88 or above with no version mismatch and no close runner-up; anything less certain waits for you."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it transfer the playlist cover art?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Name and description travel in both directions, and cover art uploads when the destination is Spotify. YouTube Music has no API for playlist artwork, so going that way Migratify downloads the original cover to your machine and tells you where it is, in case you want to set it by hand."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What if I add more songs to the playlist later?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Run migratify sync with the same playlist URL. It matches only the tracks that never reached the destination and adds them to the playlist the first migration created, rather than making a second one. The link is remembered per destination service."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it free, and where does my data go?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Migratify is free and MIT-licensed. It runs entirely on your machine and talks only to Spotify and YouTube Music. Sessions, the match cache and the reports live in a .migratify folder in your home directory. There is no Migratify server and no account to create."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a website or browser extension instead of a CLI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No, on purpose. A hosted version would need your Spotify and YouTube credentials on someone else's server, and the matcher depends on libraries that do not belong in a content script. A local command-line tool is the honest form for this problem — and it is also why nothing you migrate ever passes through a third party."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<script>document.documentElement.classList.remove("no-js");</script>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path d="M11 5h10l6 6v10l-6 6H11l-6-6V11z" fill="#5fe3d4"/>
+        <circle cx="16" cy="16" r="3.7" fill="#08090c"/>
+        <circle cx="16" cy="16" r="1.5" fill="#fff"/>
+      </svg>
+      Migratify
+      <span class="ver">v0.3.1</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#matching">Matching</a></li>
+      <li><a href="#commands">Commands</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/DecoudJuan/Migratify">GitHub</a></li>
+    </ul>
+    <div class="lang" role="group" aria-label="Language">
+      <span aria-current="page">EN</span>
+      <a href="/es" lang="es" hreflang="es">ES</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ================= hero ================= -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow rise">
+          <span class="services">
+            <span class="dot sp" aria-hidden="true"></span> Spotify
+            <span class="arrows" aria-hidden="true">&#8646;</span>
+            <span class="dot yt" aria-hidden="true"></span> YouTube Music
+          </span>
+        </p>
+
+        <h1 class="rise">Move a playlist to the other service. <em>Without the wrong songs.</em></h1>
+
+        <p class="lede rise">
+          Migratify is a free, open-source command-line tool that migrates playlists
+          <strong>both ways</strong> between Spotify and YouTube&nbsp;Music — the tracks,
+          the name, the description, the cover art, and your Liked Songs. It matches on
+          artist, title and duration, and when it is not sure, <strong>it asks you
+          instead of guessing.</strong>
+        </p>
+
+        <div class="cta rise">
+          <a class="btn primary" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-windows.zip">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11.5 3.8 7.3l1.1-1.1 2.35 2.35V1h1.5v7.55L11.1 6.2l1.1 1.1L8 11.5ZM2 13.5V12h12v1.5H2Z"/></svg>
+            Download for Windows <small>.zip</small>
+          </a>
+          <a class="btn" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-macos.zip">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11.5 3.8 7.3l1.1-1.1 2.35 2.35V1h1.5v7.55L11.1 6.2l1.1 1.1L8 11.5ZM2 13.5V12h12v1.5H2Z"/></svg>
+            macOS <small>.zip</small>
+          </a>
+          <a class="btn" href="https://github.com/DecoudJuan/Migratify">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+
+        <div class="copy-row rise">
+          <code><span class="p">$ </span>git clone https://github.com/DecoudJuan/Migratify</code>
+          <button class="copy-btn" type="button" data-copied="copied">copy</button>
+        </div>
+        <p class="fineprint rise">
+          MIT licensed · Python 3.10+ · Windows, macOS and Linux · no account, no server, no API key
+        </p>
+      </div>
+
+      <div class="term" role="img" aria-label="The Migratify interactive prompt: the banner reports version 0.3.1, both services connected, and three past runs. A plan command matches 96 tracks and reports 88 matched automatically, 6 needing review and 2 not found.">
+        <div class="term-bar">
+          <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+          <b>~/music</b> — migratify
+          <span class="right">v0.3.1</span>
+        </div>
+<div class="term-body" aria-hidden="true">
+          <div class="banner">
+            <svg class="bmark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+              <path d="M11 5h10l6 6v10l-6 6H11l-6-6V11z" fill="#5fe3d4"/>
+              <circle cx="16" cy="16" r="3.7" fill="#0f1218"/>
+              <circle cx="16" cy="16" r="1.5" fill="#fff"/>
+            </svg>
+            <div class="bnotes">♪<br>♫<br>♪</div>
+            <div class="binfo">
+              <div><b>Migratify</b> v0.3.1</div>
+              <div><span class="c-green">Spotify</span> · <span class="c-green">YouTube Music</span> <span class="c-dim">· connected</span></div>
+              <div class="c-dim">~/.migratify · 3 runs</div>
+            </div>
+          </div>
+<pre><span class="c-prompt">migratify &gt;</span> plan https://open.spotify.com/playlist/37i9dQ…</pre>
+          <div class="tpanel">
+            <span class="tpanel-title">Planning</span>
+            <div class="c-white">Late night driving</div>
+            <div>96 tracks · Spotify → YouTube Music</div>
+          </div>
+          <div class="tprog"><span>Matching</span><span class="tbar"><i></i></span><span class="c-dim">96/96</span></div>
+<pre>  <span class="c-green">matched automatically</span>   88
+  <span class="c-amber">needs your review</span>        6
+  <span class="c-red">not found</span>                2
+  <span class="c-white">total</span>                   96
+
+Report: <span class="c-white">~/.migratify/reports/late-night-driving.md</span>
+Run ID: <span class="c-white">a3f1c9b2e5d4</span>
+
+Next: <span class="c-white">migratify review</span> <span class="caret"></span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <ul class="outcomes">
+        <li>
+          <div class="k">auto-accepted</div>
+          <div class="v">Score 88 or above, no version mismatch, no close runner-up. This is the only case that needs nothing from you.</div>
+        </li>
+        <li>
+          <div class="k">queued for review</div>
+          <div class="v">Between 70 and 88, or the top two candidates within four points. You see five options with lengths and reasons, and pick.</div>
+        </li>
+        <li>
+          <div class="k">not found</div>
+          <div class="v">Below 70. Reported by name in the run report, never replaced with the closest thing that happened to turn up.</div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= the problem ================= -->
+  <section id="problem">
+    <div class="wrap split">
+      <div class="body rv">
+        <p class="label"><b>01</b> The wrong song problem</p>
+        <h2>Moving a playlist is easy. Moving it <em>correctly</em> is not.</h2>
+        <p>
+          Every playlist transfer tool hits the same wall. The same song title exists as a
+          cover, a karaoke track, a live take, a remix, a sped-up edit — and as a completely
+          different song by a completely different artist.
+        </p>
+        <p>
+          Most tools take the first search result and hand you a playlist that is quietly
+          15% wrong. You find out months later, when a song you loved plays as an acoustic
+          version recorded by someone else.
+        </p>
+        <p>
+          Migratify scores every candidate and refuses to break a tie it cannot break.
+          <strong>A wrong-artist match is capped below the review floor</strong>, so it is
+          not just rejected — it can never even be offered to you as a suggestion.
+        </p>
+      </div>
+
+      <div class="match rv" aria-label="Example of a scored candidate list">
+        <div class="match-head">
+          <div class="q">searching youtube music for</div>
+          <div class="t">Wicked Game — Chris Isaak</div>
+          <div class="m">Heart Shaped World · 4:46</div>
+        </div>
+        <div class="cand win">
+          <div class="name">Wicked Game <span>— Chris Isaak</span></div>
+          <div class="why">song · official artist channel · duration matches (4:46)</div>
+          <div class="score">96</div>
+        </div>
+        <div class="cand mid">
+          <div class="name">Wicked Game <span>— Chris Isaak</span></div>
+          <div class="why">live version · version mismatch (−25) · duration differs</div>
+          <div class="score">71</div>
+        </div>
+        <div class="cand out">
+          <div class="name">Wicked Game <span>— HIM</span></div>
+          <div class="why">artist mismatch (vetoed) — capped, cannot be suggested</div>
+          <div class="score">40</div>
+        </div>
+        <div class="cand out">
+          <div class="name">Wicked Game <span>— Karaoke Version</span></div>
+          <div class="why">artist mismatch (vetoed) · karaoke (−25)</div>
+          <div class="score">31</div>
+        </div>
+        <div class="match-foot">
+          <b>Auto-accepted:</b> the top candidate clears 88 with no version penalty and no
+          close runner-up. The other three never reach your playlist.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= how it works ================= -->
+  <section id="how">
+    <div class="wrap">
+      <p class="label rv"><b>02</b> How it works</p>
+      <h2 class="rv">Three commands. Only <em>one</em> of them writes.</h2>
+      <p class="lede rv" style="margin-top:20px">
+        Migratify separates deciding from doing. You can run the whole migration, read the
+        full report, change your mind, and nothing will have touched either account.
+      </p>
+
+      <div class="steps">
+        <article class="step rv">
+          <span class="n">01</span>
+          <h3><code>migratify plan</code></h3>
+          <p>
+            Reads the source playlist, searches the destination for every track, scores the
+            candidates and writes a report in Markdown, CSV or JSON. Every decision is saved
+            as it goes, so an interrupted run resumes where it stopped.
+          </p>
+          <span class="tag ro">read-only</span>
+        </article>
+
+        <article class="step rv">
+          <span class="n">02</span>
+          <h3><code>migratify review</code></h3>
+          <p>
+            Walks you through only the tracks the scorer could not settle. Five candidates
+            each, with lengths, scores and the reason for every number. Pick one, skip the
+            track, or stop — your progress is saved either way.
+          </p>
+          <span class="tag ro">local only</span>
+        </article>
+
+        <article class="step rv">
+          <span class="n">03</span>
+          <h3><code>migratify apply</code></h3>
+          <p>
+            Creates the playlist and adds what was accepted — and names the destination
+            account before it asks, because a playlist created in the wrong Google account
+            is invisible from the right one. Idempotent: run it twice, nothing duplicates.
+          </p>
+          <span class="tag rw">the only writer</span>
+        </article>
+      </div>
+
+      <div class="term term-narrow rv" style="margin-top:28px">
+        <div class="term-bar">
+          <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+          <b>migratify apply</b> — the confirmation
+          <span class="right">writes</span>
+        </div>
+<div class="term-body">
+<pre><span class="c-prompt">migratify &gt;</span> apply</pre>
+          <div class="tpanel">
+            <span class="tpanel-title">About to write</span>
+            <div class="c-white">Late night driving</div>
+            <div>Spotify → YouTube Music</div>
+            <div>account: <span class="c-white">juan@gmail.com</span></div>
+            <div class="pad">94 tracks will be added</div>
+            <div class="c-amber">2 unresolved matches will be left out</div>
+          </div>
+<pre>Continue? [Y/n]: y
+
+<span class="c-green">Created</span> https://music.youtube.com/playlist?list=PLxK…
+<span class="c-dim">in juan@gmail.com</span>
+<span class="c-green">Added</span> 94 tracks
+<span class="c-amber">Cover not uploaded</span> — YouTube Music has no API for
+playlist artwork. The original is at
+<span class="c-white">~/.migratify/covers/a3f1c9b2e5d4.jpg</span> if you want to set it by hand.
+
+<span class="c-green">Done.</span>
+  url:     https://music.youtube.com/playlist?list=PLxK…
+  account: juan@gmail.com on YouTube Music</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= features ================= -->
+  <section id="features">
+    <div class="wrap">
+      <p class="label rv"><b>03</b> What it carries across</p>
+      <h2 class="rv">A playlist is more than a list of tracks.</h2>
+
+      <div class="feats">
+        <article class="feat rv">
+          <h3>Both directions, one engine</h3>
+          <p>Spotify → YouTube Music and YouTube Music → Spotify. The direction is read from the URL you paste, and the matcher does not know which way it is running.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Liked Songs and saved libraries</h3>
+          <p>Your saved library migrates like any other playlist, either way — and lands as an ordinary playlist on the other side. Migratify never writes into a saved library.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Name, description, cover art</h3>
+          <p>The playlist itself travels, not just its contents. Cover upload works where the destination allows it; where it does not, you get the original image on disk.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Sync, not re-migrate</h3>
+          <p>Added songs since last time? <code>migratify sync</code> matches only what never arrived and adds it to the same playlist instead of creating a second one.</p>
+        </article>
+        <article class="feat rv">
+          <h3>You just sign in</h3>
+          <p>No developer app, no client ID, no API key, nothing to paste. It works on a free Spotify account, which the official app flow no longer does.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Auditable reports</h3>
+          <p>Every run writes Markdown, CSV or JSON: what matched, what scored, what was reviewed, what was missing. You can check the work instead of trusting it.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Resumable and cached</h3>
+          <p>Matches are cached in a local SQLite database keyed by direction, so a re-run costs no new searches. Misses are deliberately never cached — catalogs change.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Runs without Python</h3>
+          <p>Tagged releases ship a standalone build for Windows and macOS. Double-click it and you get the interactive prompt, no installation required.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= matching ================= -->
+  <section id="matching">
+    <div class="wrap">
+      <p class="label rv"><b>04</b> The matching engine</p>
+      <div class="split">
+        <div class="body rv">
+          <h2>Scored on five signals, vetoed on two.</h2>
+          <p>
+            Each source track produces several search queries against the destination, and
+            every candidate that comes back is scored from 0 to 100. Artist and duration
+            carry the weight, because they are the two things a cover or a karaoke track
+            cannot fake.
+          </p>
+          <p>
+            <strong>Artist veto</strong> — if artist similarity falls below 0.5 the candidate
+            is capped at 40, below the review floor, no matter how perfect the title looks.
+          </p>
+          <p>
+            <strong>Version penalty</strong> — 25 points for each differing version tag:
+            live, remix, acoustic, instrumental, karaoke, radio edit, sped up. A studio
+            recording will not match a live take.
+          </p>
+          <p>
+            <strong>ISRC short-circuit</strong> — when the destination exposes it, an exact
+            ISRC hit scores 100 immediately. That is recording identity, not similarity.
+          </p>
+        </div>
+
+        <div class="rv">
+          <ul class="weights">
+            <li class="key"><span class="k">artist</span><span class="bar"><i style="--w:100%"></i></span><span class="n">0.40</span></li>
+            <li><span class="k">title</span><span class="bar"><i style="--w:75%"></i></span><span class="n">0.30</span></li>
+            <li class="key"><span class="k">duration</span><span class="bar"><i style="--w:50%"></i></span><span class="n">0.20</span></li>
+            <li><span class="k">album</span><span class="bar"><i style="--w:12.5%"></i></span><span class="n">0.05</span></li>
+            <li><span class="k">result type</span><span class="bar"><i style="--w:12.5%"></i></span><span class="n">0.05</span></li>
+          </ul>
+          <div class="note">
+            <p>
+              <b>Duration is the best cover detector there is.</b> A re-recording almost
+              never lands within five seconds of the original. When a service does not
+              report a length, it scores a neutral 0.5 — absence is not evidence.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail-wrap rv">
+        <div class="rail">
+          <div class="z1">
+            <span class="r">0 — 69</span>
+            <span class="o">not found</span>
+            <span class="d">Reported by name. Nothing is substituted.</span>
+          </div>
+          <div class="z2">
+            <span class="r">70 — 87</span>
+            <span class="o">your review</span>
+            <span class="d">Five candidates, with reasons.</span>
+          </div>
+          <div class="z3">
+            <span class="r">88 — 100</span>
+            <span class="o">accepted</span>
+            <span class="d">Clean and clear.</span>
+          </div>
+        </div>
+        <div class="note">
+          <p>
+            <b>And one rule that matters as much as the thresholds:</b> if the top two
+            candidates land within four points of each other, the track goes to review even
+            at a high score. Indistinguishable candidates mean the scorer cannot tell them
+            apart — and taking the higher number would be a coin flip dressed up as a
+            decision. Every threshold is configurable, if your library disagrees.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= commands ================= -->
+  <section id="commands">
+    <div class="wrap">
+      <p class="label rv"><b>05</b> Commands</p>
+      <h2 class="rv">Every command, and whether it writes.</h2>
+      <div class="tbl-scroll rv">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Command</th>
+              <th scope="col">What it does</th>
+              <th scope="col">Writes?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>migratify</code></td>
+              <td class="tdesc">Opens the interactive prompt — the banner above. Type commands without the prefix.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify login</code></td>
+              <td class="tdesc">Connects both services by signing in. Imports an existing browser session when it can, opens a login window when it cannot.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify auth status</code></td>
+              <td class="tdesc">What is connected, and which browsers were found on this machine.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify playlists spotify</code></td>
+              <td class="tdesc">Lists your playlists on a service, with track counts. Liked Songs included.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify plan &lt;url&gt;</code></td>
+              <td class="tdesc">Matches the whole playlist and writes a report. Safe to run as many times as you like.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify review</code></td>
+              <td class="tdesc">Resolves the ambiguous matches. Records your decisions locally.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify apply</code></td>
+              <td class="tdesc">Creates the destination playlist and adds the accepted tracks. Asks first, and names the account.</td>
+              <td class="w" data-w="yes">yes</td>
+            </tr>
+            <tr>
+              <td><code>migratify migrate &lt;url&gt;</code></td>
+              <td class="tdesc">plan → review → apply, guided, in one command.</td>
+              <td class="w" data-w="yes">yes</td>
+            </tr>
+            <tr>
+              <td><code>migratify migrate liked --to ytmusic</code></td>
+              <td class="tdesc">Migrates your saved library. Also <code>--to spotify</code> for the other direction.</td>
+              <td class="w" data-w="yes">yes</td>
+            </tr>
+            <tr>
+              <td><code>migratify sync &lt;url&gt;</code></td>
+              <td class="tdesc">Adds only the tracks that never reached the destination, into the playlist the first run created.</td>
+              <td class="w" data-w="yes">yes</td>
+            </tr>
+            <tr>
+              <td><code>migratify runs</code></td>
+              <td class="tdesc">Past runs with their IDs, so you can review or report on an older one.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+            <tr>
+              <td><code>migratify report --format csv</code></td>
+              <td class="tdesc">Re-renders any run's report as Markdown, CSV or JSON.</td>
+              <td class="w" data-w="no">no</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= install ================= -->
+  <section id="install">
+    <div class="wrap">
+      <p class="label rv"><b>06</b> Get it</p>
+      <h2 class="rv">Two ways in.</h2>
+
+      <div class="two">
+        <div class="card rv">
+          <h3>Standalone build</h3>
+          <p class="sub">No Python. Unzip and run. ~70&nbsp;MB.</p>
+          <div class="cta">
+            <a class="btn primary" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-windows.zip">Windows <small>.zip</small></a>
+            <a class="btn" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-macos.zip">macOS <small>.zip</small></a>
+          </div>
+          <ul>
+            <li>Double-clicking the executable opens the interactive prompt instead of flashing a window shut.</li>
+            <li>It is a folder rather than a single file, because a one-file bundle unpacks itself on every run.</li>
+            <li>The browser automation is bundled — signing in <em>is</em> the browser automation. It drives a browser you already have.</li>
+            <li><a href="https://github.com/DecoudJuan/Migratify/releases/latest">All releases and checksums →</a></li>
+          </ul>
+        </div>
+
+        <div class="card rv">
+          <h3>From source</h3>
+          <p class="sub">Python 3.10 or newer, any platform.</p>
+          <div class="copy-row">
+            <code><span class="p">$ </span>git clone https://github.com/DecoudJuan/Migratify</code>
+            <button class="copy-btn" type="button" data-copied="copied">copy</button>
+          </div>
+          <div class="copy-row">
+            <code><span class="p">$ </span>cd Migratify &amp;&amp; pip install -e ".[login]"</code>
+            <button class="copy-btn" type="button" data-copied="copied">copy</button>
+          </div>
+          <div class="copy-row">
+            <code><span class="p">$ </span>migratify login</code>
+            <button class="copy-btn" type="button" data-copied="copied">copy</button>
+          </div>
+          <ul>
+            <li>The <code>login</code> extra pulls in the browser automation, which is what lets you connect an account by simply signing in.</li>
+            <li>Then <code>migratify auth status</code> to confirm, and <code>migratify playlists spotify</code> to see what you have.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="platform rv">
+        <span class="chip"><b>macOS</b> — sessions import directly; Safari needs Full Disk Access for your terminal</span>
+        <span class="chip"><b>Windows</b> — Chrome and Edge encrypt cookies since v127, so Migratify opens its own login window</span>
+        <span class="chip"><b>Linux</b> — depends on your keyring, generally fine</span>
+        <span class="chip"><b>Over SSH</b> — <code>migratify auth ytmusic --paste</code></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= faq ================= -->
+  <section id="faq">
+    <div class="wrap">
+      <p class="label rv"><b>07</b> Questions</p>
+      <h2 class="rv">The things people actually ask.</h2>
+
+      <div class="faq rv">
+        <details>
+          <summary>How do I transfer a Spotify playlist to YouTube Music?</summary>
+          <div class="a"><p>Install Migratify, run <code>migratify login</code> once to sign in to both services, then run <code>migratify migrate</code> followed by the playlist URL. Migratify detects the direction from the link, matches every track against YouTube Music, asks you about the ones it cannot decide, and only then creates the playlist.</p></div>
+        </details>
+        <details>
+          <summary>Does it also move playlists from YouTube Music to Spotify?</summary>
+          <div class="a"><p>Yes. The same engine runs in both directions and the direction is taken from the URL you paste: a Spotify link migrates to YouTube Music, a YouTube Music link migrates to Spotify. Nothing about the matching changes.</p></div>
+        </details>
+        <details>
+          <summary>Can I migrate my Liked Songs or saved library?</summary>
+          <div class="a"><p>Yes, in either direction: <code>migratify migrate liked --to ytmusic</code>, or <code>--to spotify</code>. Your saved library lands as an ordinary playlist on the other service. Migratify never writes into a saved library, because an unwanted playlist takes one click to delete and several hundred saved tracks do not.</p></div>
+        </details>
+        <details>
+          <summary>Do I need a Spotify developer app, client ID or API key?</summary>
+          <div class="a"><p>No. You sign in the way you always do, in a browser window, and Migratify captures that session locally. There is nothing to register and nothing to paste.</p></div>
+        </details>
+        <details>
+          <summary>Does it work on a free Spotify account?</summary>
+          <div class="a"><p>Yes, and that is why signing in is the default path. Since 2025 Spotify requires a Premium subscription for a newly registered app to reach the Web API, so the usual register-an-app flow is unavailable on a free account. Signing in does not touch that gate.</p></div>
+        </details>
+        <details>
+          <summary>Will it add the wrong version of a song?</summary>
+          <div class="a"><p>That is the failure Migratify is built to avoid. Every candidate is scored on artist, title, duration, album and result type. A wrong-artist candidate is vetoed below the review floor so it cannot even be offered. Each differing version tag — live, remix, acoustic, karaoke, sped up — costs 25 points. A track only auto-accepts at 88 or above with no version mismatch and no close runner-up; anything less certain waits for you.</p></div>
+        </details>
+        <details>
+          <summary>Does it transfer the playlist cover art?</summary>
+          <div class="a"><p>Name and description travel in both directions, and cover art uploads when the destination is Spotify. YouTube Music has no API for playlist artwork, so going that way Migratify downloads the original cover to your machine and tells you where it is, in case you want to set it by hand.</p></div>
+        </details>
+        <details>
+          <summary>What if I add more songs to the playlist later?</summary>
+          <div class="a"><p>Run <code>migratify sync</code> with the same playlist URL. It matches only the tracks that never reached the destination and adds them to the playlist the first migration created, rather than making a second one. The link is remembered per destination service.</p></div>
+        </details>
+        <details>
+          <summary>Is it free, and where does my data go?</summary>
+          <div class="a"><p>Migratify is free and MIT-licensed. It runs entirely on your machine and talks only to Spotify and YouTube Music. Sessions, the match cache and the reports live in a <code>.migratify</code> folder in your home directory. There is no Migratify server and no account to create.</p></div>
+        </details>
+        <details>
+          <summary>Is there a website or browser extension instead of a CLI?</summary>
+          <div class="a"><p>No, on purpose. A hosted version would need your Spotify and YouTube credentials on someone else's server, and the matcher depends on libraries that do not belong in a content script. A local command-line tool is the honest form for this problem — and it is also why nothing you migrate ever passes through a third party.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= final ================= -->
+  <section class="final">
+    <div class="wrap">
+      <h2 class="rv">Your playlist, on the other service. <em>Track for track.</em></h2>
+      <p class="lede rv">
+        Run <code>plan</code> as many times as you like — it never touches an account.
+        Nothing is created until you say <code>apply</code>.
+      </p>
+      <div class="cta rv">
+        <a class="btn primary" href="https://github.com/DecoudJuan/Migratify/releases/latest">Download v0.3.1</a>
+        <a class="btn" href="https://github.com/DecoudJuan/Migratify">Read the source</a>
+      </div>
+      <div class="copy-row rv">
+        <code><span class="p">$ </span>migratify migrate https://open.spotify.com/playlist/…</code>
+        <button class="copy-btn" type="button" data-copied="copied">copy</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>Migratify v0.3.1 — MIT licensed, built by <a href="https://github.com/DecoudJuan">Juan Decoud</a></span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/DecoudJuan/Migratify">GitHub</a>
+      <a href="https://github.com/DecoudJuan/Migratify/releases/latest">Releases</a>
+      <a href="https://github.com/DecoudJuan/Migratify/issues">Report a bad match</a>
+      <a href="/es" lang="es" hreflang="es">Español</a>
+    </nav>
+    <p class="disclaimer">
+      Not affiliated with, endorsed by or sponsored by Spotify or Google. Spotify and
+      YouTube Music are trademarks of their respective owners. Migratify runs on your own
+      machine, using your own accounts.
+    </p>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

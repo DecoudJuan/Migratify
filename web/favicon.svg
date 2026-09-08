@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Migratify">
+  <rect width="32" height="32" rx="7" fill="#08090c"/>
+  <path d="M11 5h10l6 6v10l-6 6H11l-6-6V11z" fill="#5fe3d4"/>
+  <circle cx="16" cy="16" r="3.7" fill="#08090c"/>
+  <circle cx="16" cy="16" r="1.5" fill="#fff"/>
+</svg>
