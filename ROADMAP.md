@@ -194,6 +194,42 @@ opens on a terminal — piped or redirected, help is still the right answer, and
 
 ---
 
+## Phase 10 — The landing page ✅
+
+| | Item |
+|---|---|
+| ✅ | `web/` — a static bilingual landing page, English at `/` and Spanish at `/es` |
+| ✅ | SEO: canonical + `hreflang` pair, Open Graph and Twitter cards, `SoftwareApplication` and `FAQPage` JSON-LD, `robots.txt`, `sitemap.xml` |
+| ✅ | `scripts/build_og.py` — the 1200×630 social card, drawn with Pillow |
+| ✅ | `vercel.json` — clean URLs, cache and security headers, `/download` → the latest release |
+
+Two files, one stylesheet and about two kilobytes of script. No framework and
+no build step: a page that exists to hand someone a download does not need a
+toolchain, and the repository stays a Python project with a folder of HTML in
+it rather than a Python project with a JavaScript project inside it.
+
+**Bilingual because the search terms are.** *"Transfer Spotify playlist to
+YouTube Music"* and *"migrar playlists de Spotify a YouTube Music"* are two
+different queries with two different results pages, and the tool answers both.
+The English page is `x-default`, and the two point at each other with
+`hreflang`.
+
+**The terminal is redrawn, not screenshotted.** The banner, the panels and the
+progress bar are SVG and CSS instead of an image, so the text is real,
+selectable and indexable — and it survives the fonts. Reproducing the Rich
+output with box-drawing characters looked right in a terminal and fell apart in
+a browser: whichever font supplies the glyphs the webfont is missing brings its
+own advance width, so a border made of `─` never lines up with the ASCII beside
+it.
+
+**What it claims, it claims exactly.** The weights, the thresholds, the veto
+cap, the platform limits and the download size on the page are the ones in
+`score.py`, `config.Thresholds` and the published release assets. A landing
+page that oversells the matcher would undermine the only promise the project
+makes — `web/README.md` says so, next to the `grep` that finds them.
+
+---
+
 ## Beyond v0.1 💭
 
 Not committed to, recorded so the reasoning is not lost.
