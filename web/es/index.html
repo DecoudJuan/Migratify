@@ -38,7 +38,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/style.css">
 
 <script type="application/ld+json">
@@ -209,11 +209,10 @@
         <h1 class="rise">Pasá tu playlist al otro servicio. <em>Sin canciones equivocadas.</em></h1>
 
         <p class="lede rise">
-          Migratify es una herramienta de línea de comandos gratuita y open source que migra
-          playlists <strong>en los dos sentidos</strong> entre Spotify y YouTube&nbsp;Music:
-          las canciones, el nombre, la descripción, la portada y tus Me gusta. Compara
-          artista, título y duración, y cuando no está segura,
-          <strong>te pregunta en vez de adivinar.</strong>
+          Una herramienta de línea de comandos gratuita y open source que mueve
+          playlists <strong>en los dos sentidos</strong> entre Spotify y
+          YouTube&nbsp;Music: canciones, portada y Me gusta. Cuando no sabe qué
+          versión es la correcta, <strong>pregunta en vez de adivinar.</strong>
         </p>
 
         <div class="cta rise">
@@ -284,15 +283,15 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
       <ul class="outcomes">
         <li>
           <div class="k">aceptada sola</div>
-          <div class="v">88 puntos o más, sin diferencia de versión y sin un segundo candidato pegado. Es el único caso que no necesita nada de vos.</div>
+          <div class="v">88 o más, sin diferencia de versión y sin un segundo candidato pegado.</div>
         </li>
         <li>
           <div class="k">a revisión</div>
-          <div class="v">Entre 70 y 88, o los dos primeros candidatos a menos de cuatro puntos. Ves cinco opciones con duración y motivos, y elegís.</div>
+          <div class="v">Entre 70 y 88, o casi empate. Cinco candidatos, y elegís vos.</div>
         </li>
         <li>
           <div class="k">no encontrada</div>
-          <div class="v">Menos de 70. Queda listada con nombre y apellido en el reporte, nunca reemplazada por lo más parecido que apareció.</div>
+          <div class="v">Menos de 70. Queda listada por nombre, nunca sustituida.</div>
         </li>
       </ul>
     </div>
@@ -305,21 +304,15 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
         <p class="label"><b>01</b> El problema de la canción equivocada</p>
         <h2>Mover una playlist es fácil. Moverla <em>bien</em> no.</h2>
         <p>
-          Todas las herramientas para migrar playlists chocan contra la misma pared: el
-          mismo título existe como cover, como karaoke, como versión en vivo, como remix,
-          como edit acelerado — y como una canción completamente distinta de un artista
-          completamente distinto.
+          El mismo título existe como cover, como karaoke, como versión en vivo, como
+          remix, como edit acelerado — y como una canción distinta de un artista
+          distinto.
         </p>
         <p>
-          La mayoría agarra el primer resultado de la búsqueda y te entrega una playlist que
-          está silenciosamente 15% mal. Te enterás meses después, cuando una canción que
-          amabas suena en una versión acústica grabada por otra persona.
-        </p>
-        <p>
-          Migratify puntúa cada candidato y se niega a desempatar lo que no puede desempatar.
-          <strong>Un candidato con el artista equivocado queda por debajo del piso de
-          revisión</strong>, así que no solo se rechaza: nunca puede llegar a ofrecerse como
-          sugerencia.
+          La mayoría agarra el primer resultado y te entrega una playlist que está
+          silenciosamente 15% mal. Migratify puntúa cada candidato, y
+          <strong>uno con el artista equivocado queda por debajo del piso de
+          revisión</strong> — así que nunca puede llegar a ofrecerse.
         </p>
       </div>
 
@@ -363,8 +356,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
       <p class="label rv"><b>02</b> Cómo funciona</p>
       <h2 class="rv">Tres comandos. Solo <em>uno</em> escribe.</h2>
       <p class="lede rv" style="margin-top:20px">
-        Migratify separa decidir de hacer. Podés correr la migración entera, leer el reporte
-        completo, cambiar de opinión — y ninguna de las dos cuentas se enteró.
+        Decidir está separado de hacer. Corré la migración entera, leé el reporte,
+        cambiá de opinión — ninguna de las dos cuentas se enteró.
       </p>
 
       <div class="steps">
@@ -372,9 +365,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">01</span>
           <h3><code>migratify plan</code></h3>
           <p>
-            Lee la playlist de origen, busca cada canción en el destino, puntúa los
-            candidatos y escribe un reporte en Markdown, CSV o JSON. Guarda cada decisión a
-            medida que avanza, así una corrida interrumpida sigue donde quedó.
+            Lee la playlist de origen, puntúa cada candidato en el destino y escribe
+            un reporte. Una corrida interrumpida sigue donde quedó.
           </p>
           <span class="tag ro">solo lectura</span>
         </article>
@@ -383,9 +375,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">02</span>
           <h3><code>migratify review</code></h3>
           <p>
-            Te muestra únicamente las canciones que el puntaje no pudo resolver. Cinco
-            candidatos cada una, con duración, puntaje y el motivo de cada número. Elegís,
-            salteás o cortás: el progreso queda guardado igual.
+            Solo las canciones que el puntaje no pudo resolver. Cinco candidatos cada
+            una, con duración, puntaje y el motivo de cada número.
           </p>
           <span class="tag ro">solo local</span>
         </article>
@@ -394,9 +385,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">03</span>
           <h3><code>migratify apply</code></h3>
           <p>
-            Crea la playlist y agrega lo aceptado — y nombra la cuenta de destino antes de
-            preguntar, porque una playlist creada en la cuenta de Google equivocada es
-            invisible desde la correcta. Idempotente: corrélo dos veces y nada se duplica.
+            Crea la playlist y agrega lo aceptado — nombrando la cuenta de destino
+            antes de preguntar. Corrélo dos veces y nada se duplica.
           </p>
           <span class="tag rw">el único que escribe</span>
         </article>
@@ -444,35 +434,39 @@ playlist artwork. The original is at
       <div class="feats">
         <article class="feat rv">
           <h3>Los dos sentidos, un motor</h3>
-          <p>Spotify → YouTube Music y YouTube Music → Spotify. La dirección sale de la URL que pegás, y el matcher no sabe para qué lado está corriendo.</p>
+          <p>Spotify → YouTube Music y de vuelta. La dirección sale de la URL que pegás.</p>
         </article>
         <article class="feat rv">
-          <h3>Me gusta y biblioteca guardada</h3>
-          <p>Tu biblioteca guardada migra como cualquier otra playlist, en cualquier dirección — y llega como una playlist normal del otro lado. Nunca escribe dentro de tu biblioteca.</p>
+          <h3>Me gusta</h3>
+          <p>Tu biblioteca guardada migra como cualquier playlist — y llega como una. Nunca se escribe dentro de una biblioteca.</p>
         </article>
         <article class="feat rv">
           <h3>Nombre, descripción y portada</h3>
-          <p>Viaja la playlist, no solo su contenido. La portada se sube donde el destino lo permite; donde no, te deja la imagen original en el disco.</p>
+          <p>Viaja la playlist, no solo su contenido. La portada se sube donde el destino lo permite.</p>
         </article>
         <article class="feat rv">
           <h3>Sync en vez de migrar de nuevo</h3>
-          <p>¿Agregaste canciones desde la última vez? <code>migratify sync</code> busca solo lo que nunca llegó y lo agrega a la misma playlist, sin crear una segunda.</p>
+          <p><code>migratify sync</code> busca solo lo que nunca llegó, en la playlist que ya existe.</p>
         </article>
         <article class="feat rv">
           <h3>Solo iniciás sesión</h3>
-          <p>Sin app de desarrollador, sin client ID, sin API key, sin nada que pegar. Funciona con una cuenta gratuita de Spotify, que es justo lo que el flujo oficial ya no permite.</p>
+          <p>Sin app de desarrollador, sin client ID, sin API key. Funciona con una cuenta gratuita de Spotify.</p>
         </article>
         <article class="feat rv">
           <h3>Reportes auditables</h3>
-          <p>Cada corrida escribe Markdown, CSV o JSON: qué coincidió, con qué puntaje, qué revisaste, qué faltó. Podés verificar el trabajo en vez de confiar.</p>
+          <p>Markdown, CSV o JSON por corrida: qué coincidió, con qué puntaje, qué faltó.</p>
         </article>
         <article class="feat rv">
           <h3>Retomable y con caché</h3>
-          <p>Las coincidencias se guardan en una base SQLite local por dirección, así volver a correr no cuesta búsquedas nuevas. Las faltantes nunca se cachean: los catálogos cambian.</p>
+          <p>Las coincidencias se guardan localmente por dirección, así volver a correr no cuesta búsquedas nuevas.</p>
         </article>
         <article class="feat rv">
           <h3>Corre sin Python</h3>
-          <p>Cada release publica un build independiente para Windows y macOS. Doble clic y se abre el prompt interactivo, sin instalar nada.</p>
+          <p>Builds independientes para Windows y macOS. Doble clic y se abre el prompt.</p>
+        </article>
+        <article class="feat rv">
+          <h3>Sin servidor, sin cuenta</h3>
+          <p>Corre en tu máquina y habla solo con los dos servicios. Todo queda en <code>~/.migratify</code>.</p>
         </article>
       </div>
     </div>
@@ -486,23 +480,22 @@ playlist artwork. The original is at
         <div class="body rv">
           <h2>Cinco señales para puntuar, dos para vetar.</h2>
           <p>
-            Cada canción de origen genera varias búsquedas en el destino, y cada candidato
-            que vuelve se puntúa de 0 a 100. El artista y la duración se llevan el peso,
-            porque son las dos cosas que un cover o un karaoke no pueden falsear.
+            Cada candidato que vuelve se puntúa de 0 a 100. El artista y la duración
+            se llevan el peso, porque son lo que un cover no puede falsear.
           </p>
           <p>
-            <strong>Veto de artista</strong> — si el parecido de artista baja de 0.5, el
-            candidato queda con un tope de 40, debajo del piso de revisión, no importa lo
+            <strong>Veto de artista</strong> — un parecido menor a 0.5 deja al
+            candidato con un tope de 40, debajo del piso de revisión, no importa lo
             perfecto que se vea el título.
           </p>
           <p>
-            <strong>Penalización de versión</strong> — 25 puntos por cada etiqueta de versión
-            distinta: en vivo, remix, acústico, instrumental, karaoke, radio edit, acelerado.
-            Una grabación de estudio no va a coincidir con una toma en vivo.
+            <strong>Penalización de versión</strong> — 25 puntos por cada etiqueta
+            distinta: en vivo, remix, acústico, instrumental, karaoke, radio edit,
+            acelerado.
           </p>
           <p>
-            <strong>Atajo por ISRC</strong> — cuando el destino lo expone, un ISRC exacto
-            puntúa 100 al instante. Eso es identidad de grabación, no parecido.
+            <strong>Atajo por ISRC</strong> — un ISRC exacto puntúa 100 al instante.
+            Identidad de grabación, no parecido.
           </p>
         </div>
 
@@ -544,12 +537,10 @@ playlist artwork. The original is at
         </div>
         <div class="note">
           <p>
-            <b>Y una regla que importa tanto como los umbrales:</b> si los dos primeros
-            candidatos quedan a menos de cuatro puntos, la canción va a revisión incluso con
-            puntaje alto. Dos candidatos indistinguibles significan que el puntaje no puede
-            diferenciarlos — y quedarse con el número más alto sería tirar una moneda
-            disfrazada de decisión. Todos los umbrales se pueden configurar, si tu biblioteca
-            opina distinto.
+            <b>La regla del casi empate importa tanto como los umbrales:</b> si los dos
+            primeros quedan a menos de cuatro puntos, la canción va a revisión incluso
+            con puntaje alto. Quedarse con el número más alto sería tirar una moneda
+            disfrazada de decisión. Todos los umbrales se pueden configurar.
           </p>
         </div>
       </div>
@@ -652,8 +643,7 @@ playlist artwork. The original is at
             <a class="btn" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-macos.zip">macOS <small>.zip</small></a>
           </div>
           <ul>
-            <li>Doble clic al ejecutable abre el prompt interactivo, en vez de una ventana que aparece y se cierra.</li>
-            <li>Es una carpeta y no un único archivo, porque un bundle de un solo archivo se descomprime en cada ejecución.</li>
+            <li>Doble clic al ejecutable abre el prompt interactivo.</li>
             <li>Incluye la automatización del navegador — iniciar sesión <em>es</em> esa automatización. No trae un navegador: usa el que ya tenés.</li>
             <li><a href="https://github.com/DecoudJuan/Migratify/releases/latest">Todas las releases y checksums →</a></li>
           </ul>
@@ -675,8 +665,8 @@ playlist artwork. The original is at
             <button class="copy-btn" type="button" data-copied="copiado">copiar</button>
           </div>
           <ul>
-            <li>El extra <code>login</code> trae la automatización del navegador, que es lo que permite conectar una cuenta simplemente iniciando sesión.</li>
-            <li>Después, <code>migratify auth status</code> para confirmar y <code>migratify playlists spotify</code> para ver qué tenés.</li>
+            <li>El extra <code>login</code> <em>es</em> la automatización del navegador, lo que te deja conectar iniciando sesión.</li>
+            <li>Después, <code>migratify auth status</code> para confirmar que funcionó.</li>
           </ul>
         </div>
       </div>
@@ -768,7 +758,7 @@ playlist artwork. The original is at
     <nav aria-label="Pie de página">
       <a href="https://github.com/DecoudJuan/Migratify">GitHub</a>
       <a href="https://github.com/DecoudJuan/Migratify/releases/latest">Releases</a>
-      <a href="https://github.com/DecoudJuan/Migratify/issues">Reportar una coincidencia mala</a>
+      <a href="https://github.com/DecoudJuan/Migratify/issues/new">Reportar un problema</a>
       <a href="../" lang="en" hreflang="en">English</a>
     </nav>
     <p class="disclaimer">

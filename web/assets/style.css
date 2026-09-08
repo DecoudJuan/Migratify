@@ -1,9 +1,10 @@
 /* ==========================================================================
    Migratify - landing page
-   Aesthetic: phosphor terminal meets field manual. Editorial serif headlines
-   over a monospaced body, on near-black. The three match outcomes
-   (accepted / review / not found) are the whole colour system, because they
-   are the whole product.
+   Aesthetic: one typeface, the tool's own. Everything is set in IBM Plex
+   Mono on near-black -- headlines included -- because a CLI has no business
+   introducing a second voice. The three match outcomes (accepted / review /
+   not found) are the whole colour system, because they are the whole
+   product.
    ========================================================================== */
 
 :root {
@@ -34,7 +35,6 @@
 
   --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas,
           "DejaVu Sans Mono", monospace;
-  --serif: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -118,22 +118,26 @@ a:hover { color: #8df3e7; }
 /* --- type ---------------------------------------------------------------- */
 
 h1, h2, h3 {
-  font-family: var(--serif);
-  font-weight: 400;
-  letter-spacing: -0.015em;
-  line-height: 1.04;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.14;
   margin: 0;
   text-wrap: balance;
 }
 
-h1 { font-size: clamp(2.5rem, 6.2vw, 4.8rem); }
-h2 { font-size: clamp(2rem, 4.4vw, 3.1rem); }
-h3 { font-size: clamp(1.2rem, 2vw, 1.45rem); line-height: 1.2; }
+/* monospaced headlines are wide, so they run smaller and tighter than a
+   proportional face would */
+h1 { font-size: clamp(1.8rem, 3.2vw, 2.45rem); }
+h2 { font-size: clamp(1.45rem, 2.6vw, 1.95rem); }
+h3 { font-size: clamp(1rem, 1.5vw, 1.15rem); }
 
-h1 em, h2 em {
-  font-style: italic;
-  color: var(--cyan);
-}
+/* No italics anywhere. IBM Plex Mono has no true italic here, and a slanted
+   monospace reads as a rendering fault rather than emphasis -- so emphasis is
+   colour. <i> is only ever a decorative block in this page. */
+em, i { font-style: normal; }
+em { color: var(--cyan); font-weight: 500; }
+h1 em, h2 em { color: var(--cyan); font-weight: inherit; }
 
 p { margin: 0 0 1.1em; max-width: var(--measure); }
 p:last-child { margin-bottom: 0; }
@@ -660,8 +664,9 @@ section + section { border-top: 1px solid var(--line); }
   padding: 24px 22px 22px;
 }
 .step .n {
-  font-family: var(--serif);
-  font-size: 2.4rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
   line-height: 1;
   color: var(--cyan-deep);
   display: block;
@@ -691,7 +696,7 @@ section + section { border-top: 1px solid var(--line); }
 
 .feats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   margin-top: 46px;
   border: 1px solid var(--line);
@@ -724,6 +729,9 @@ section + section { border-top: 1px solid var(--line); }
   flex: none;
 }
 .feat p { font-size: 13px; color: var(--dim); margin: 0; max-width: none; }
+
+@media (max-width: 900px) { .feats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .feats { grid-template-columns: minmax(0, 1fr); } }
 
 /* --- weights ------------------------------------------------------------- */
 

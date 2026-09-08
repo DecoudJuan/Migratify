@@ -38,7 +38,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
 
 <script type="application/ld+json">
@@ -212,11 +212,10 @@
         <h1 class="rise">Move a playlist to the other service. <em>Without the wrong songs.</em></h1>
 
         <p class="lede rise">
-          Migratify is a free, open-source command-line tool that migrates playlists
-          <strong>both ways</strong> between Spotify and YouTube&nbsp;Music — the tracks,
-          the name, the description, the cover art, and your Liked Songs. It matches on
-          artist, title and duration, and when it is not sure, <strong>it asks you
-          instead of guessing.</strong>
+          A free, open-source command-line tool that moves playlists
+          <strong>both ways</strong> between Spotify and YouTube&nbsp;Music — tracks,
+          cover art and Liked Songs. When it is not sure which version is right,
+          <strong>it asks instead of guessing.</strong>
         </p>
 
         <div class="cta rise">
@@ -287,15 +286,15 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
       <ul class="outcomes">
         <li>
           <div class="k">auto-accepted</div>
-          <div class="v">Score 88 or above, no version mismatch, no close runner-up. This is the only case that needs nothing from you.</div>
+          <div class="v">88 or above, no version mismatch, no close runner-up.</div>
         </li>
         <li>
           <div class="k">queued for review</div>
-          <div class="v">Between 70 and 88, or the top two candidates within four points. You see five options with lengths and reasons, and pick.</div>
+          <div class="v">70 to 88, or a near-tie. Five candidates, and you pick.</div>
         </li>
         <li>
           <div class="k">not found</div>
-          <div class="v">Below 70. Reported by name in the run report, never replaced with the closest thing that happened to turn up.</div>
+          <div class="v">Below 70. Reported by name, never substituted.</div>
         </li>
       </ul>
     </div>
@@ -308,19 +307,14 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
         <p class="label"><b>01</b> The wrong song problem</p>
         <h2>Moving a playlist is easy. Moving it <em>correctly</em> is not.</h2>
         <p>
-          Every playlist transfer tool hits the same wall. The same song title exists as a
-          cover, a karaoke track, a live take, a remix, a sped-up edit — and as a completely
-          different song by a completely different artist.
+          The same title exists as a cover, a karaoke track, a live take, a remix,
+          a sped-up edit — and as a different song by a different artist.
         </p>
         <p>
-          Most tools take the first search result and hand you a playlist that is quietly
-          15% wrong. You find out months later, when a song you loved plays as an acoustic
-          version recorded by someone else.
-        </p>
-        <p>
-          Migratify scores every candidate and refuses to break a tie it cannot break.
-          <strong>A wrong-artist match is capped below the review floor</strong>, so it is
-          not just rejected — it can never even be offered to you as a suggestion.
+          Most tools take the first search result and hand you a playlist that is
+          quietly 15% wrong. Migratify scores every candidate instead, and
+          <strong>a wrong-artist match is capped below the review floor</strong> —
+          so it can never even be offered to you.
         </p>
       </div>
 
@@ -364,8 +358,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
       <p class="label rv"><b>02</b> How it works</p>
       <h2 class="rv">Three commands. Only <em>one</em> of them writes.</h2>
       <p class="lede rv" style="margin-top:20px">
-        Migratify separates deciding from doing. You can run the whole migration, read the
-        full report, change your mind, and nothing will have touched either account.
+        Deciding is separate from doing. Run the whole migration, read the report,
+        change your mind — neither account will have noticed.
       </p>
 
       <div class="steps">
@@ -373,9 +367,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">01</span>
           <h3><code>migratify plan</code></h3>
           <p>
-            Reads the source playlist, searches the destination for every track, scores the
-            candidates and writes a report in Markdown, CSV or JSON. Every decision is saved
-            as it goes, so an interrupted run resumes where it stopped.
+            Reads the source playlist, scores every candidate on the destination and
+            writes a report. An interrupted run resumes where it stopped.
           </p>
           <span class="tag ro">read-only</span>
         </article>
@@ -384,9 +377,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">02</span>
           <h3><code>migratify review</code></h3>
           <p>
-            Walks you through only the tracks the scorer could not settle. Five candidates
-            each, with lengths, scores and the reason for every number. Pick one, skip the
-            track, or stop — your progress is saved either way.
+            Only the tracks the scorer could not settle. Five candidates each, with
+            lengths, scores and the reason for every number.
           </p>
           <span class="tag ro">local only</span>
         </article>
@@ -395,9 +387,8 @@ Next: <span class="c-white">migratify review</span> <span class="caret"></span><
           <span class="n">03</span>
           <h3><code>migratify apply</code></h3>
           <p>
-            Creates the playlist and adds what was accepted — and names the destination
-            account before it asks, because a playlist created in the wrong Google account
-            is invisible from the right one. Idempotent: run it twice, nothing duplicates.
+            Creates the playlist and adds what was accepted — naming the destination
+            account before it asks. Run it twice and nothing duplicates.
           </p>
           <span class="tag rw">the only writer</span>
         </article>
@@ -445,35 +436,39 @@ playlist artwork. The original is at
       <div class="feats">
         <article class="feat rv">
           <h3>Both directions, one engine</h3>
-          <p>Spotify → YouTube Music and YouTube Music → Spotify. The direction is read from the URL you paste, and the matcher does not know which way it is running.</p>
+          <p>Spotify → YouTube Music and back again. The direction comes from the URL you paste.</p>
         </article>
         <article class="feat rv">
-          <h3>Liked Songs and saved libraries</h3>
-          <p>Your saved library migrates like any other playlist, either way — and lands as an ordinary playlist on the other side. Migratify never writes into a saved library.</p>
+          <h3>Liked Songs</h3>
+          <p>Your saved library migrates like any playlist — and lands as one. Nothing is ever written into a library.</p>
         </article>
         <article class="feat rv">
-          <h3>Name, description, cover art</h3>
-          <p>The playlist itself travels, not just its contents. Cover upload works where the destination allows it; where it does not, you get the original image on disk.</p>
+          <h3>Name, description, cover</h3>
+          <p>The playlist travels, not just its contents. Cover upload wherever the destination allows it.</p>
         </article>
         <article class="feat rv">
           <h3>Sync, not re-migrate</h3>
-          <p>Added songs since last time? <code>migratify sync</code> matches only what never arrived and adds it to the same playlist instead of creating a second one.</p>
+          <p><code>migratify sync</code> matches only what never arrived, into the playlist that already exists.</p>
         </article>
         <article class="feat rv">
           <h3>You just sign in</h3>
-          <p>No developer app, no client ID, no API key, nothing to paste. It works on a free Spotify account, which the official app flow no longer does.</p>
+          <p>No developer app, no client ID, no API key. Works on a free Spotify account.</p>
         </article>
         <article class="feat rv">
           <h3>Auditable reports</h3>
-          <p>Every run writes Markdown, CSV or JSON: what matched, what scored, what was reviewed, what was missing. You can check the work instead of trusting it.</p>
+          <p>Markdown, CSV or JSON per run: what matched, what it scored, what was missing.</p>
         </article>
         <article class="feat rv">
           <h3>Resumable and cached</h3>
-          <p>Matches are cached in a local SQLite database keyed by direction, so a re-run costs no new searches. Misses are deliberately never cached — catalogs change.</p>
+          <p>Matches are cached locally per direction, so running it again costs no new searches.</p>
         </article>
         <article class="feat rv">
           <h3>Runs without Python</h3>
-          <p>Tagged releases ship a standalone build for Windows and macOS. Double-click it and you get the interactive prompt, no installation required.</p>
+          <p>Standalone builds for Windows and macOS. Double-click and you get the prompt.</p>
+        </article>
+        <article class="feat rv">
+          <h3>No server, no account</h3>
+          <p>It runs on your machine and talks only to the two services. Everything stays in <code>~/.migratify</code>.</p>
         </article>
       </div>
     </div>
@@ -487,23 +482,20 @@ playlist artwork. The original is at
         <div class="body rv">
           <h2>Scored on five signals, vetoed on two.</h2>
           <p>
-            Each source track produces several search queries against the destination, and
-            every candidate that comes back is scored from 0 to 100. Artist and duration
-            carry the weight, because they are the two things a cover or a karaoke track
-            cannot fake.
+            Every candidate that comes back is scored from 0 to 100. Artist and
+            duration carry the weight, because they are what a cover cannot fake.
           </p>
           <p>
-            <strong>Artist veto</strong> — if artist similarity falls below 0.5 the candidate
-            is capped at 40, below the review floor, no matter how perfect the title looks.
+            <strong>Artist veto</strong> — similarity below 0.5 caps the candidate at
+            40, under the review floor, however perfect the title looks.
           </p>
           <p>
-            <strong>Version penalty</strong> — 25 points for each differing version tag:
-            live, remix, acoustic, instrumental, karaoke, radio edit, sped up. A studio
-            recording will not match a live take.
+            <strong>Version penalty</strong> — 25 points for every differing tag:
+            live, remix, acoustic, instrumental, karaoke, radio edit, sped up.
           </p>
           <p>
-            <strong>ISRC short-circuit</strong> — when the destination exposes it, an exact
-            ISRC hit scores 100 immediately. That is recording identity, not similarity.
+            <strong>ISRC short-circuit</strong> — an exact ISRC hit scores 100 at
+            once. Recording identity, not similarity.
           </p>
         </div>
 
@@ -545,11 +537,10 @@ playlist artwork. The original is at
         </div>
         <div class="note">
           <p>
-            <b>And one rule that matters as much as the thresholds:</b> if the top two
-            candidates land within four points of each other, the track goes to review even
-            at a high score. Indistinguishable candidates mean the scorer cannot tell them
-            apart — and taking the higher number would be a coin flip dressed up as a
-            decision. Every threshold is configurable, if your library disagrees.
+            <b>The near-tie rule matters as much as the thresholds:</b> top two within four
+            points and the track goes to review, however high the score. Taking the
+            higher number would be a coin flip dressed as a decision. Every threshold
+            is configurable.
           </p>
         </div>
       </div>
@@ -652,8 +643,7 @@ playlist artwork. The original is at
             <a class="btn" href="https://github.com/DecoudJuan/Migratify/releases/latest/download/migratify-macos.zip">macOS <small>.zip</small></a>
           </div>
           <ul>
-            <li>Double-clicking the executable opens the interactive prompt instead of flashing a window shut.</li>
-            <li>It is a folder rather than a single file, because a one-file bundle unpacks itself on every run.</li>
+            <li>Double-clicking the executable opens the interactive prompt.</li>
             <li>The browser automation is bundled — signing in <em>is</em> the browser automation. It drives a browser you already have.</li>
             <li><a href="https://github.com/DecoudJuan/Migratify/releases/latest">All releases and checksums →</a></li>
           </ul>
@@ -675,8 +665,8 @@ playlist artwork. The original is at
             <button class="copy-btn" type="button" data-copied="copied">copy</button>
           </div>
           <ul>
-            <li>The <code>login</code> extra pulls in the browser automation, which is what lets you connect an account by simply signing in.</li>
-            <li>Then <code>migratify auth status</code> to confirm, and <code>migratify playlists spotify</code> to see what you have.</li>
+            <li>The <code>login</code> extra is the browser automation — what lets you connect by signing in.</li>
+            <li>Then <code>migratify auth status</code> to confirm it worked.</li>
           </ul>
         </div>
       </div>
@@ -768,7 +758,7 @@ playlist artwork. The original is at
     <nav aria-label="Footer">
       <a href="https://github.com/DecoudJuan/Migratify">GitHub</a>
       <a href="https://github.com/DecoudJuan/Migratify/releases/latest">Releases</a>
-      <a href="https://github.com/DecoudJuan/Migratify/issues">Report a bad match</a>
+      <a href="https://github.com/DecoudJuan/Migratify/issues/new">Report a bad match</a>
       <a href="es/" lang="es" hreflang="es">Español</a>
     </nav>
     <p class="disclaimer">
