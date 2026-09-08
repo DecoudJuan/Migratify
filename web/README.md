@@ -58,6 +58,27 @@ site in it. If you ever want the simpler toggle instead, rename this folder to
   its own domain, but today the sitemap has to be handed to Search Console
   directly.
 
+## Search-engine verification files
+
+```
+googlec58813ae3adac4a5.html   Google Search Console
+BingSiteAuth.xml              Bing Webmaster Tools
+```
+
+**Do not delete these, ever** — not even after verification succeeds. Both
+consoles re-check the file periodically and silently drop the property when it
+stops answering, taking the indexing reports and the sitemap submission with
+it.
+
+They live in this folder because on GitHub Pages there is nowhere else to put
+them. Both consoles say "upload the file to your site", but an Actions deploy
+replaces the published site wholesale on every run: a file that is not in
+`web/` does not exist a minute later. Committing it *is* the upload.
+
+They have to sit at the property's prefix, which is
+`https://decoudjuan.github.io/Migratify/`, so the folder root is also the right
+place for them.
+
 ## The canonical domain
 
 Every absolute URL — `<link rel=canonical>`, the `hreflang` alternates,
