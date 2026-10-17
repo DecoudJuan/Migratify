@@ -328,3 +328,6 @@ Conventional Commits, scoped and atomic — one logical change per commit. The
 body explains *why*, especially for a non-obvious trade-off, so the history
 reads as the story of how the tool was built. `ROADMAP.md` links completed
 items back to their commit; keep it current.
+
+Commits y PRs sin atribución a Claude: nada de `Co-Authored-By: Claude` ni
+"Generated with Claude Code".

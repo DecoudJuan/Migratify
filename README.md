@@ -46,7 +46,16 @@ it is confident, it matches. When it is not, it asks you.
 
 ---
 
-## Install
+## Stack
+
+- Python 3.10+ with a `src/` layout, built with hatchling.
+- `httpx`, `ytmusicapi`, `rapidfuzz`, `typer`, `rich`, `pydantic`, `platformdirs` and `Pillow` at runtime; SQLite for the local store.
+- Optional extras: `login` (Playwright, rookiepy, browser-cookie3) for signing in, `package` (PyInstaller) for the standalone binary, `dev` (pytest, pytest-cov, ruff).
+- The landing page in `web/` is plain static HTML, CSS and JavaScript with no build step.
+
+---
+
+## Install and local setup
 
 ```bash
 git clone https://github.com/DecoudJuan/Migratify.git
@@ -387,6 +396,32 @@ they have to move together with the code.
 The scorer is a pure function, so the golden set of hard matching cases runs
 entirely offline. See [CLAUDE.md](CLAUDE.md) for the architecture and the
 invariants to preserve.
+
+---
+
+## Deploy
+
+Migratify is a local CLI, so there is no server to deploy. Two things are published
+from GitHub Actions:
+
+- **The landing page**, from the `web/` folder, to
+  <https://decoudjuan.github.io/Migratify/> on GitHub Pages. `.github/workflows/pages.yml`
+  runs on every push to `main` that touches `web/`.
+- **The binaries** for Windows and macOS: pushing a `v*` tag runs
+  `.github/workflows/release.yml`, which builds each platform with
+  `python scripts/build_exe.py` and attaches the zips to a GitHub release.
+
+`.github/workflows/ci.yml` runs `ruff check` and `pytest` on Ubuntu, macOS and
+Windows for every push to `main` and every pull request.
+
+---
+
+## Docs
+
+- [docs/arquitectura.md](docs/arquitectura.md): how the code is laid out and how a migration flows.
+- [CLAUDE.md](CLAUDE.md): architecture, invariants and conventions in full.
+- [ROADMAP.md](ROADMAP.md): phases done and planned.
+- [web/README.md](web/README.md): the landing page.
 
 ---
 
